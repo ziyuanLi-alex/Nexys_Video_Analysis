@@ -33,102 +33,6 @@
 --applicable agreement for further details.
 
 
---LIBRARY ieee;
---USE ieee.std_logic_1164.all;
-
---LIBRARY altera_mf;
---USE altera_mf.all;
-
---ENTITY framebuffer IS
---	PORT
---	(
---		data		: IN STD_LOGIC_VECTOR (15 DOWNTO 0);
---		rdaddress		: IN STD_LOGIC_VECTOR (12 DOWNTO 0);
---		rdclock		: IN STD_LOGIC ;
---		wraddress		: IN STD_LOGIC_VECTOR (12 DOWNTO 0);
---		wrclock		: IN STD_LOGIC  := '1';
---		wren		: IN STD_LOGIC  := '0';
---		q		: OUT STD_LOGIC_VECTOR (15 DOWNTO 0)
---	);
---END framebuffer;
-
-
---ARCHITECTURE SYN OF framebuffer IS
-
---	SIGNAL sub_wire0	: STD_LOGIC_VECTOR (15 DOWNTO 0);
-
-
-
---	COMPONENT altsyncram
---	GENERIC (
---		address_aclr_b		: STRING;
---		address_reg_b		: STRING;
---		clock_enable_input_a		: STRING;
---		clock_enable_input_b		: STRING;
---		clock_enable_output_b		: STRING;
---		intended_device_family		: STRING;
---		lpm_type		: STRING;
---		numwords_a		: NATURAL;
---		numwords_b		: NATURAL;
---		operation_mode		: STRING;
---		outdata_aclr_b		: STRING;
---		outdata_reg_b		: STRING;
---		power_up_uninitialized		: STRING;
---		ram_block_type		: STRING;
---		widthad_a		: NATURAL;
---		widthad_b		: NATURAL;
---		width_a		: NATURAL;
---		width_b		: NATURAL;
---		width_byteena_a		: NATURAL
---	);
---	PORT (
---			address_a	: IN STD_LOGIC_VECTOR (12 DOWNTO 0);
---			clock0	: IN STD_LOGIC ;
---			data_a	: IN STD_LOGIC_VECTOR (15 DOWNTO 0);
---			q_b	: OUT STD_LOGIC_VECTOR (15 DOWNTO 0);
---			wren_a	: IN STD_LOGIC ;
---			address_b	: IN STD_LOGIC_VECTOR (12 DOWNTO 0);
---			clock1	: IN STD_LOGIC 
---	);
---	END COMPONENT;
-
---BEGIN
---	q    <= sub_wire0(15 DOWNTO 0);
-
---	altsyncram_component : altsyncram
---	GENERIC MAP (
---		address_aclr_b => "NONE",
---		address_reg_b => "CLOCK1",
---		clock_enable_input_a => "BYPASS",
---		clock_enable_input_b => "BYPASS",
---		clock_enable_output_b => "BYPASS",
---		intended_device_family => "Cyclone III",
---		lpm_type => "altsyncram",
---		numwords_a => 8192,
---		numwords_b => 8192,
---		operation_mode => "DUAL_PORT",
---		outdata_aclr_b => "NONE",
---		outdata_reg_b => "CLOCK1",
---		power_up_uninitialized => "FALSE",
---		ram_block_type => "M9K",
---		widthad_a => 13,
---		widthad_b => 13,
---		width_a => 16,
---		width_b => 16,
---		width_byteena_a => 1
---	)
---	PORT MAP (
---		address_a => wraddress,
---		clock0 => wrclock,
---		data_a => data,
---		wren_a => wren,
---		address_b => rdaddress,
---		clock1 => rdclock,
---		q_b => sub_wire0
---	);
---END SYN;
-
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
@@ -151,7 +55,7 @@ signal ram : ram_type := (others => (others => '0'));
 signal rd_data : std_logic_vector(15 downto 0);
 begin
 
--- 写入过程
+
 process(wrclock)
 begin
     if rising_edge(wrclock) then
@@ -161,7 +65,7 @@ begin
     end if;
 end process;
 
--- 读取过程
+
 process(rdclock)
 begin
     if rising_edge(rdclock) then
