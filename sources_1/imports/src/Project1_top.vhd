@@ -63,8 +63,8 @@ entity Project1_top is
 	 VGA_HS    : OUT   STD_LOGIC;
 	 VGA_VS    : OUT   STD_LOGIC;
 
-     number : in  std_logic_vector (15 downto 0); -- 8¸öÊı×ÖµÄÊäÈëÊı¾İ(Ã¿¸öÊı×Ö4Î»£¬¹²8*4=32Î»)
-     seg : out  std_logic_vector (6 downto 0);    -- Êı¾İ¶Ë(×î¸ßÎ»ÎªĞ¡Êıµã)
+     number : in  std_logic_vector (15 downto 0); -- 8ï¿½ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½(Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½4Î»ï¿½ï¿½ï¿½ï¿½8*4=32Î»)
+     seg : out  std_logic_vector (6 downto 0);    -- ï¿½ï¿½ï¿½İ¶ï¿½(ï¿½ï¿½ï¿½Î»ÎªĞ¡ï¿½ï¿½ï¿½ï¿½)
      an : out  std_logic_vector (7 downto 0);   
 	 SW : in std_logic_vector( 9 downto 0 );
 	 KEY : in std_logic_vector( 3 downto 0);
@@ -80,11 +80,25 @@ architecture rtl of Project1_top is
   ---------------------------------------------------------------- 
 
   COMPONENT display
-    Port(clk : in  std_logic;                         -- 100MHzÏµÍ³Ê±ÖÓ
-         number : in  std_logic_vector (15 downto 0); -- 8¸öÊı×ÖµÄÊäÈëÊı¾İ(Ã¿¸öÊı×Ö4Î»£¬¹²8*4=32Î»)
-         seg : out  std_logic_vector (6 downto 0);    -- Êı¾İ¶Ë(×î¸ßÎ»ÎªĞ¡Êıµã)
-         an : out  std_logic_vector (7 downto 0));    -- Ñô¼«Ñ¡Ôñ¶Ë
+    Port(clk : in  std_logic;                         -- 100MHzÏµÍ³Ê±ï¿½ï¿½
+         number : in  std_logic_vector (15 downto 0); -- 8ï¿½ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½(Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½4Î»ï¿½ï¿½ï¿½ï¿½8*4=32Î»)
+         seg : out  std_logic_vector (6 downto 0);    -- ï¿½ï¿½ï¿½İ¶ï¿½(ï¿½ï¿½ï¿½Î»ÎªĞ¡ï¿½ï¿½ï¿½ï¿½)
+         an : out  std_logic_vector (7 downto 0));    -- ï¿½ï¿½ï¿½ï¿½Ñ¡ï¿½ï¿½ï¿½
   END COMPONENT;
+
+component clk_wiz_0
+port
+ (-- Clock in ports
+  -- Clock out ports
+  clk_100M          : out    std_logic;
+  clk_50M          : out    std_logic;
+  clk_200M          : out    std_logic;
+  clk_25M          : out    std_logic;
+  -- Status and control signals
+  locked            : out    std_logic;
+  clk_in           : in     std_logic
+ );
+end component;
 
 
   COMPONENT OV7670_driver
@@ -148,22 +162,61 @@ architecture rtl of Project1_top is
   COMPONENT framebuffer 
     PORT
     (
-      rdclock		: IN STD_LOGIC ;
-      rdaddress	: IN std_logic_vector (12 downto 0);
-      q		: OUT std_logic_vector (15 DOWNTO 0);--data OUT
-
-      wrclock		: IN STD_LOGIC;
-      wraddress	: IN std_logic_vector (12 downto 0);
       data		: IN std_logic_vector (15 DOWNTO 0);
-      wren		: IN STD_LOGIC
+      wraddress	: IN std_logic_vector (12 downto 0);
+      wrclock		: IN STD_LOGIC;
+      wren		: IN STD_LOGIC;
+      rdaddress	: IN std_logic_vector (12 downto 0);
+      rdclock		: IN STD_LOGIC ;
+      q		: OUT std_logic_vector (15 DOWNTO 0)--data OUT
+
     );
   END COMPONENT;
+
+  component ddr_framebuffer
+    port (
+      -- ä¿æŒä¸åŸframebufferç›¸åŒçš„æ¥å£
+      data : in std_logic_vector(15 downto 0);
+      wraddress : in std_logic_vector(12 downto 0);
+      wrclock : in std_logic;
+      wren : in std_logic;
+      rdaddress : in std_logic_vector(12 downto 0);
+      rdclock : in std_logic;
+      q : out std_logic_vector(15 downto 0);
+      
+      -- æ–°å¢ç³»ç»Ÿæ¥å£
+      clk_200MHz_i : in std_logic;
+      rst_i : in std_logic;
+      
+      -- DDR2ç‰©ç†æ¥å£
+      ddr2_addr : out std_logic_vector(12 downto 0);
+      ddr2_ba : out std_logic_vector(2 downto 0);
+      ddr2_ras_n : out std_logic;
+      ddr2_cas_n : out std_logic;
+      ddr2_we_n : out std_logic;
+      ddr2_ck_p : out std_logic_vector(0 downto 0);
+      ddr2_ck_n : out std_logic_vector(0 downto 0);
+      ddr2_cke : out std_logic_vector(0 downto 0);
+      ddr2_cs_n : out std_logic_vector(0 downto 0);
+      ddr2_dm : out std_logic_vector(1 downto 0);
+      ddr2_odt : out std_logic_vector(0 downto 0);
+      ddr2_dq : inout std_logic_vector(15 downto 0);
+      ddr2_dqs_p : inout std_logic_vector(1 downto 0);
+      ddr2_dqs_n : inout std_logic_vector(1 downto 0)
+    );
+  end component;
 
   ----------------------------------------------------------------
   --- Variables
   ----------------------------------------------------------------
-  signal xclk  : STD_LOGIC := '0';   
-  signal CLOCK_50: std_logic;
+  signal xclk  : STD_LOGIC := '0'; -- This will now be driven by clk_wiz_0
+  -- signal CLOCK_50: std_logic; -- Removed: Replaced by clk_50M from clk_wiz_0
+
+  -- Signals for clk_wiz_0 outputs
+  signal clk_100M : std_logic; -- 100MHz output from clk_wiz_0 (if needed, or a buffered version)
+  signal clk_50M  : std_logic; -- 50MHz output from clk_wiz_0
+  signal clk_200M : std_logic; -- 200MHz output from clk_wiz_0 (for DDR)
+  signal locked   : std_logic; -- Lock signal from clk_wiz_0
 
   constant CLOCK_50_FREQ : integer := 50000000;
   constant BLINK_FREQ : integer := 1;
@@ -238,11 +291,35 @@ begin
 --  --AUD_ADCLRCK	<=	AUD_DACLRCK;
 --  AUD_XCK     <=  AUD_CTRL_CLK;
     
-  clock_div_inst: entity work.clk_div_50MHz
-     port map(
-         clk_in => CLOCK_100,
-         clk_out => CLOCK_50
-     );
+  -- clock_div_inst: entity work.clk_div_50MHz
+  --    port map(
+  --        clk_in => CLOCK_100,
+  --        clk_out => CLOCK_50
+  --    ); -- Removed: Replaced by clk_wiz_0
+
+--   clk_wiz : clk_wiz_0
+--    port map ( 
+--   -- Clock out ports  
+--    clk_100M => clk_100M,
+--    clk_50M => clk_50M,
+--    clk_200M => clk_200M,
+--    clk_25M  => xclk,           -- Connect clk_25M output to xclk
+--    -- Clock in ports
+--    clk_in => CLOCK_100
+--  );
+
+ clk_wiz : clk_wiz_0
+   port map ( 
+  -- Clock out ports  
+   clk_100M => clk_100M,
+   clk_50M => clk_50M,
+   clk_200M => clk_200M,
+   clk_25M => xclk,
+  -- Status and control signals                
+   locked => OPEN,
+   -- Clock in ports
+   clk_in => CLOCK_100
+ );
 
   disp: display PORT MAP
   (	  
@@ -254,7 +331,7 @@ begin
 
   ovdr : OV7670_driver PORT MAP
   (
-    iclk50  => xclk,
+    iclk50  => clk_50M, -- Changed from xclk to clk_50M
     config_finished => config_finished,
     sioc  => ov7670_sioc,
     siod  => ov7670_siod,
@@ -300,7 +377,7 @@ begin
 
   fb : framebuffer PORT MAP 
   (
-    rdclock  => CLOCK_50,
+    rdclock  => clk_50M, -- Changed from CLOCK_50
     rdaddress => buffer_addr,
     q => buffer_data,
 
@@ -313,10 +390,10 @@ begin
   ----------------------------------------------------------------
   --- Processes
   ----------------------------------------------------------------
-  process(CLOCK_50)
+  process(clk_50M) -- Changed from CLOCK_50
 
   begin
-    if rising_edge(CLOCK_50) then
+    if rising_edge(clk_50M) then -- Changed from CLOCK_50
       if cnt >= CNT_MAX then
 	cnt <= (others => '0');
 	blink <= not blink;
@@ -353,7 +430,7 @@ begin
 	  buzzercnt <= buzzercnt + 1;
 	end if;
       end if;
-      xclk <= not xclk; --System clock for OV and VGA 25mhz
+      -- xclk <= not xclk; --System clock for OV and VGA 25mhz -- Removed: xclk is now generated by clk_wiz_0
     end if;
   end process;
   
