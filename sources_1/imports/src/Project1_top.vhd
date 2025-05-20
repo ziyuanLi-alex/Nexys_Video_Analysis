@@ -69,7 +69,22 @@ entity Project1_top is
 	 SW : in std_logic_vector( 9 downto 0 );
 	 KEY : in std_logic_vector( 3 downto 0);
 	 LEDG          : OUT   std_logic_vector(7 downto 0);
-	 LEDR : OUT std_logic_vector( 9 downto 0 )
+	 LEDR : OUT std_logic_vector( 9 downto 0 );
+	 -- DDR2 Interface for ddr_framebuffer
+	 ddr2_addr : out std_logic_vector(12 downto 0);
+	 ddr2_ba : out std_logic_vector(2 downto 0);
+	 ddr2_ras_n : out std_logic;
+	 ddr2_cas_n : out std_logic;
+	 ddr2_we_n : out std_logic;
+	 ddr2_ck_p : out std_logic_vector(0 downto 0);
+	 ddr2_ck_n : out std_logic_vector(0 downto 0);
+	 ddr2_cke : out std_logic_vector(0 downto 0);
+	 ddr2_cs_n : out std_logic_vector(0 downto 0);
+	 ddr2_dm : out std_logic_vector(1 downto 0);
+	 ddr2_odt : out std_logic_vector(0 downto 0);
+	 ddr2_dq : inout std_logic_vector(15 downto 0);
+	 ddr2_dqs_p : inout std_logic_vector(1 downto 0);
+	 ddr2_dqs_n : inout std_logic_vector(1 downto 0)
        );
 end Project1_top;
 
@@ -265,6 +280,7 @@ end component;
   signal AUD_CTRL_CLK : STD_LOGIC;
   signal buzzer : STD_LOGIC := '0';
   signal buzzercnt : unsigned(31 downto 0);
+  signal rst_ddr : std_logic := '0'; -- Reset for ddr_framebuffer, ensure proper reset logic generation by user
 
 
 begin
@@ -297,16 +313,6 @@ begin
   --        clk_out => CLOCK_50
   --    ); -- Removed: Replaced by clk_wiz_0
 
---   clk_wiz : clk_wiz_0
---    port map ( 
---   -- Clock out ports  
---    clk_100M => clk_100M,
---    clk_50M => clk_50M,
---    clk_200M => clk_200M,
---    clk_25M  => xclk,           -- Connect clk_25M output to xclk
---    -- Clock in ports
---    clk_in => CLOCK_100
---  );
 
  clk_wiz : clk_wiz_0
    port map ( 
@@ -375,16 +381,48 @@ begin
     we    => capture_we
   );
 
-  fb : framebuffer PORT MAP 
-  (
-    rdclock  => clk_50M, -- Changed from CLOCK_50
-    rdaddress => buffer_addr,
-    q => buffer_data,
+  -- fb : framebuffer PORT MAP -- Commented out original framebuffer
+  -- (
+  --   rdclock  => clk_50M, 
+  --   rdaddress => buffer_addr,
+  --   q => buffer_data,
 
-    wrclock => OV7670_PCLK,
-    wraddress => capture_addr,
-    data  => capture_data,
-    wren   => capture_we
+  --   wrclock => OV7670_PCLK,
+  --   wraddress => capture_addr,
+  --   data  => capture_data,
+  --   wren   => capture_we
+  -- );
+
+  fb_ddr : ddr_framebuffer PORT MAP
+  (
+    -- Original framebuffer signals (interface to the rest of the design)
+    data      => capture_data,    -- Data input from OV7670_capture
+    wraddress => capture_addr,    -- Write address from OV7670_capture
+    wrclock   => OV7670_PCLK,     -- Write clock (camera pixel clock)
+    wren      => capture_we,      -- Write enable from OV7670_capture
+    rdaddress => buffer_addr,     -- Read address from vga_driver
+    rdclock   => xclk,         -- Read clock (e.g. system clock for VGA logic)
+    q         => buffer_data,     -- Data output to vga_driver
+
+    -- New system interface signals for ddr_framebuffer controller
+    clk_200MHz_i => clk_200M,     -- 200MHz clock for DDR2 controller
+    rst_i        => rst_ddr,      -- Reset for DDR2 controller (ensure proper reset generation by user)
+
+    -- DDR2 physical interface - connect to top-level ports
+    ddr2_addr    => ddr2_addr,
+    ddr2_ba      => ddr2_ba,
+    ddr2_ras_n   => ddr2_ras_n,
+    ddr2_cas_n   => ddr2_cas_n,
+    ddr2_we_n    => ddr2_we_n,
+    ddr2_ck_p    => ddr2_ck_p,
+    ddr2_ck_n    => ddr2_ck_n,
+    ddr2_cke     => ddr2_cke,
+    ddr2_cs_n    => ddr2_cs_n,
+    ddr2_dm      => ddr2_dm,
+    ddr2_odt     => ddr2_odt,
+    ddr2_dq      => ddr2_dq,
+    ddr2_dqs_p   => ddr2_dqs_p,
+    ddr2_dqs_n   => ddr2_dqs_n
   );
 
   ----------------------------------------------------------------
