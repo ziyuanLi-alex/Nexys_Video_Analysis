@@ -66,22 +66,7 @@ ENTITY Project1_top IS
     KEY : IN STD_LOGIC_VECTOR(3 DOWNTO 0);
     LEDG : OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
     LEDR : OUT STD_LOGIC_VECTOR(9 DOWNTO 0)
-    
-    -- DDR2 Interface for ddr_framebuffer - 已启用
-    -- ddr2_addr : OUT STD_LOGIC_VECTOR(12 DOWNTO 0);
-    -- ddr2_ba : OUT STD_LOGIC_VECTOR(2 DOWNTO 0);
-    -- ddr2_ras_n : OUT STD_LOGIC;
-    -- ddr2_cas_n : OUT STD_LOGIC;
-    -- ddr2_we_n : OUT STD_LOGIC;
-    -- ddr2_ck_p : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-    -- ddr2_ck_n : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-    -- ddr2_cke : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-    -- ddr2_cs_n : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-    -- ddr2_dm : OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
-    -- ddr2_odt : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-    -- ddr2_dq : INOUT STD_LOGIC_VECTOR(15 DOWNTO 0);
-    -- ddr2_dqs_p : INOUT STD_LOGIC_VECTOR(1 DOWNTO 0);
-    -- ddr2_dqs_n : INOUT STD_LOGIC_VECTOR(1 DOWNTO 0)
+
   );
 END Project1_top;
 
@@ -177,39 +162,6 @@ ARCHITECTURE rtl OF Project1_top IS
       q : OUT STD_LOGIC_VECTOR (15 DOWNTO 0)--data OUT
     );
   END COMPONENT;
-
-  -- COMPONENT ddr_framebuffer
-  --   PORT (
-  --     data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-  --     wraddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0);
-  --     wrclock : IN STD_LOGIC;
-  --     wren : IN STD_LOGIC;
-  --     rdaddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0);
-  --     rdclock : IN STD_LOGIC;
-  --     q : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
-      
-  --     -- DDR系统接口
-  --     clk_200MHz_i : IN STD_LOGIC;
-  --     rst_i : IN STD_LOGIC;
-  --     device_temp_i : IN STD_LOGIC_VECTOR(11 DOWNTO 0);
-      
-  --     -- DDR2物理接口
-  --     ddr2_addr : OUT STD_LOGIC_VECTOR(12 DOWNTO 0);
-  --     ddr2_ba : OUT STD_LOGIC_VECTOR(2 DOWNTO 0);
-  --     ddr2_ras_n : OUT STD_LOGIC;
-  --     ddr2_cas_n : OUT STD_LOGIC;
-  --     ddr2_we_n : OUT STD_LOGIC;
-  --     ddr2_ck_p : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-  --     ddr2_ck_n : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-  --     ddr2_cke : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-  --     ddr2_cs_n : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-  --     ddr2_dm : OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
-  --     ddr2_odt : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-  --     ddr2_dq : INOUT STD_LOGIC_VECTOR(15 DOWNTO 0);
-  --     ddr2_dqs_p : INOUT STD_LOGIC_VECTOR(1 DOWNTO 0);
-  --     ddr2_dqs_n : INOUT STD_LOGIC_VECTOR(1 DOWNTO 0)
-  --   );
-  -- END COMPONENT;
 
   ----------------------------------------------------------------
   --- Variables
@@ -380,7 +332,6 @@ BEGIN
     we => capture_we
   );
 
-  -- 不再使用原始framebuffer，改用ddr_framebuffer
   fb : framebuffer PORT MAP
   (
     rdclock => clk_50M,
@@ -392,40 +343,6 @@ BEGIN
     data => capture_data,
     wren => capture_we
   );
-
-  -- 使用DDR framebuffer
-  -- fb_ddr : ddr_framebuffer PORT MAP
-  -- (
-  --   -- 原始framebuffer接口
-  --   data => capture_data,
-  --   wraddress => capture_addr,
-  --   wrclock => OV7670_PCLK,
-  --   wren => capture_we,
-  --   rdaddress => buffer_addr,
-  --   rdclock => clk_25M,
-  --   q => buffer_data,
-    
-  --   -- DDR系统接口
-  --   clk_200MHz_i => clk_200M,
-  --   rst_i => rst_ddr,
-  --   device_temp_i => device_temp,
-    
-  --   -- DDR2物理接口
-  --   ddr2_addr => ddr2_addr,
-  --   ddr2_ba => ddr2_ba,
-  --   ddr2_ras_n => ddr2_ras_n,
-  --   ddr2_cas_n => ddr2_cas_n,
-  --   ddr2_we_n => ddr2_we_n,
-  --   ddr2_ck_p => ddr2_ck_p,
-  --   ddr2_ck_n => ddr2_ck_n,
-  --   ddr2_cke => ddr2_cke,
-  --   ddr2_cs_n => ddr2_cs_n,
-  --   ddr2_dm => ddr2_dm,
-  --   ddr2_odt => ddr2_odt,
-  --   ddr2_dq => ddr2_dq,
-  --   ddr2_dqs_p => ddr2_dqs_p,
-  --   ddr2_dqs_n => ddr2_dqs_n
-  -- );
 
   ----------------------------------------------------------------
   --- Processes
@@ -441,10 +358,10 @@ BEGIN
       END IF;
 
       -- 将最大运动值显示在七段数码管上
-      mSEG7 <= std_logic_vector(to_unsigned(max, mSEG7'length));
+      -- mSEG7 <= std_logic_vector(to_unsigned(max, mSEG7'length));
       
       -- 监控模式检测
-      survmode <= surveillance OR surveillance2;
+      -- survmode <= surveillance OR surveillance2;
     END IF;
   END PROCESS;
 
