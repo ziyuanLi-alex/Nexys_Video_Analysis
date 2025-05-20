@@ -1,72 +1,119 @@
+-------------------------------------------------------------------------------
+--                                                                 
+--  DDR Framebuffer - Simple Implementation
+--                                                                  
+-------------------------------------------------------------------------------
+-- FILE NAME      : ddr_framebuffer.vhd
+-- DESCRIPTION    : Framebuffer implementation using DDR memory with identical
+--                  interface to the original framebuffer
+-------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity ddr_framebuffer is
 port (
-  -- 保持与原framebuffer相同的接口
-  data : in std_logic_vector(15 downto 0);
-  wraddress : in std_logic_vector(12 downto 0);
-  wrclock : in std_logic;
-  wren : in std_logic;
-  rdaddress : in std_logic_vector(12 downto 0);
-  rdclock : in std_logic;
-  q : out std_logic_vector(15 downto 0);
-  
-  -- 新增系统接口
-  clk_200MHz_i : in std_logic;
-  rst_i : in std_logic;
-  
-  -- DDR2物理接口
-  ddr2_addr : out std_logic_vector(12 downto 0);
-  ddr2_ba : out std_logic_vector(2 downto 0);
-  ddr2_ras_n : out std_logic;
-  ddr2_cas_n : out std_logic;
-  ddr2_we_n : out std_logic;
-  ddr2_ck_p : out std_logic_vector(0 downto 0);
-  ddr2_ck_n : out std_logic_vector(0 downto 0);
-  ddr2_cke : out std_logic_vector(0 downto 0);
-  ddr2_cs_n : out std_logic_vector(0 downto 0);
-  ddr2_dm : out std_logic_vector(1 downto 0);
-  ddr2_odt : out std_logic_vector(0 downto 0);
-  ddr2_dq : inout std_logic_vector(15 downto 0);
-  ddr2_dqs_p : inout std_logic_vector(1 downto 0);
-  ddr2_dqs_n : inout std_logic_vector(1 downto 0)
+    -- Original framebuffer interface
+    data : in std_logic_vector(15 downto 0);
+    wraddress : in std_logic_vector(12 downto 0);
+    wrclock : in std_logic;
+    wren : in std_logic;
+    rdaddress : in std_logic_vector(12 downto 0);
+    rdclock : in std_logic;
+    q : out std_logic_vector(15 downto 0);
+    
+    -- DDR interface (add to port map in top level)
+    clk_200MHz_i : in std_logic;
+    rst_i : in std_logic;
+    device_temp_i : in std_logic_vector(11 downto 0);
+    
+    -- DDR2 physical interface
+    ddr2_addr : out std_logic_vector(12 downto 0);
+    ddr2_ba : out std_logic_vector(2 downto 0);
+    ddr2_ras_n : out std_logic;
+    ddr2_cas_n : out std_logic;
+    ddr2_we_n : out std_logic;
+    ddr2_ck_p : out std_logic_vector(0 downto 0);
+    ddr2_ck_n : out std_logic_vector(0 downto 0);
+    ddr2_cke : out std_logic_vector(0 downto 0);
+    ddr2_cs_n : out std_logic_vector(0 downto 0);
+    ddr2_dm : out std_logic_vector(1 downto 0);
+    ddr2_odt : out std_logic_vector(0 downto 0);
+    ddr2_dq : inout std_logic_vector(15 downto 0);
+    ddr2_dqs_p : inout std_logic_vector(1 downto 0);
+    ddr2_dqs_n : inout std_logic_vector(1 downto 0)
 );
-end entity;
+end ddr_framebuffer;
 
-architecture Behavioral of ddr_framebuffer is
-  -- 内部信号声明
-  signal ram_a : std_logic_vector(26 downto 0);
-  signal ram_dq_i : std_logic_vector(15 downto 0);
-  signal ram_dq_o : std_logic_vector(15 downto 0);
-  signal ram_cen : std_logic;
-  signal ram_oen : std_logic;
-  signal ram_wen : std_logic;
-  signal ram_ub : std_logic;
-  signal ram_lb : std_logic;
-  
-  -- 状态机信号
-  type state_type is (IDLE, READ_OP, WRITE_OP, WAIT_READ, WAIT_WRITE);
-  signal current_state, next_state : state_type;
-  
-  -- 读写状态信号
-  signal read_pending : std_logic := '0';
-  signal write_pending : std_logic := '0';
-  signal read_addr_reg : std_logic_vector(12 downto 0);
-  signal write_addr_reg : std_logic_vector(12 downto 0);
-  signal write_data_reg : std_logic_vector(15 downto 0);
+architecture rtl of ddr_framebuffer is
+
+-- Component declaration for Ram2Ddr
+component Ram2Ddr is
+   port (
+      -- Common
+      clk_200MHz_i : in std_logic;
+      rst_i : in std_logic;
+      device_temp_i : in std_logic_vector(11 downto 0);
+      
+      -- RAM interface
+      ram_a : in std_logic_vector(26 downto 0);
+      ram_dq_i : in std_logic_vector(15 downto 0);
+      ram_dq_o : out std_logic_vector(15 downto 0);
+      ram_cen : in std_logic;
+      ram_oen : in std_logic;
+      ram_wen : in std_logic;
+      ram_ub : in std_logic;
+      ram_lb : in std_logic;
+      
+      -- DDR2 interface
+      ddr2_addr : out std_logic_vector(12 downto 0);
+      ddr2_ba : out std_logic_vector(2 downto 0);
+      ddr2_ras_n : out std_logic;
+      ddr2_cas_n : out std_logic;
+      ddr2_we_n : out std_logic;
+      ddr2_ck_p : out std_logic_vector(0 downto 0);
+      ddr2_ck_n : out std_logic_vector(0 downto 0);
+      ddr2_cke : out std_logic_vector(0 downto 0);
+      ddr2_cs_n : out std_logic_vector(0 downto 0);
+      ddr2_dm : out std_logic_vector(1 downto 0);
+      ddr2_odt : out std_logic_vector(0 downto 0);
+      ddr2_dq : inout std_logic_vector(15 downto 0);
+      ddr2_dqs_p : inout std_logic_vector(1 downto 0);
+      ddr2_dqs_n : inout std_logic_vector(1 downto 0)
+   );
+end component;
+
+-- Simple state machine
+type state_type is (IDLE, WRITING, READING);
+signal state : state_type := IDLE;
+
+-- Registers for synchronization
+signal wr_data_reg : std_logic_vector(15 downto 0);
+signal wr_addr_reg : std_logic_vector(12 downto 0);
+signal wr_en_reg : std_logic;
+signal rd_addr_reg : std_logic_vector(12 downto 0);
+signal rd_data_reg : std_logic_vector(15 downto 0);
+
+-- RAM to DDR interface signals
+signal ram_addr : std_logic_vector(26 downto 0);
+signal ram_dq_i : std_logic_vector(15 downto 0);
+signal ram_dq_o : std_logic_vector(15 downto 0);
+signal ram_cen : std_logic := '1';  -- Active low
+signal ram_oen : std_logic := '1';  -- Active low
+signal ram_wen : std_logic := '1';  -- Active low
+signal ram_ub : std_logic := '0';   -- Active low
+signal ram_lb : std_logic := '0';   -- Active low
 
 begin
-  -- RAM2DDR实例化
-  Inst_RAM2DDR: entity work.ram2ddr
-  port map (
+
+-- Instantiate the Ram2Ddr module
+ram2ddr_inst : Ram2Ddr
+port map (
     clk_200MHz_i => clk_200MHz_i,
     rst_i => rst_i,
-    device_temp_i => x"000", -- 可连接温度传感器或设为0
+    device_temp_i => device_temp_i,
     
-    -- RAM接口连接到内部信号
-    ram_a => ram_a,
+    ram_a => ram_addr,
     ram_dq_i => ram_dq_i,
     ram_dq_o => ram_dq_o,
     ram_cen => ram_cen,
@@ -75,7 +122,6 @@ begin
     ram_ub => ram_ub,
     ram_lb => ram_lb,
     
-    -- DDR2物理接口直接连接
     ddr2_addr => ddr2_addr,
     ddr2_ba => ddr2_ba,
     ddr2_ras_n => ddr2_ras_n,
@@ -90,125 +136,86 @@ begin
     ddr2_dq => ddr2_dq,
     ddr2_dqs_p => ddr2_dqs_p,
     ddr2_dqs_n => ddr2_dqs_n
-  );
-  
-  -- 写请求处理
-  process(wrclock)
-  begin
+);
+
+-- Capture write requests
+process(wrclock)
+begin
     if rising_edge(wrclock) then
-      if rst_i = '1' then
-        write_pending <= '0';
-      elsif wren = '1' then
-        write_pending <= '1';
-        write_addr_reg <= wraddress;
-        write_data_reg <= data;
-      elsif current_state = WRITE_OP then
-        write_pending <= '0';
-      end if;
-    end if;
-  end process;
-  
-  -- 读请求处理
-  process(rdclock)
-  begin
-    if rising_edge(rdclock) then
-      if rst_i = '1' then
-        read_pending <= '0';
-      else
-        read_pending <= '1';
-        read_addr_reg <= rdaddress;
-      end if;
-    end if;
-  end process;
-  
-  -- 状态机时序逻辑
-  process(clk_200MHz_i)
-  begin
-    if rising_edge(clk_200MHz_i) then
-      if rst_i = '1' then
-        current_state <= IDLE;
-      else
-        current_state <= next_state;
-      end if;
-    end if;
-  end process;
-  
-  -- 状态机组合逻辑
-  process(current_state, read_pending, write_pending)
-  begin
-    next_state <= current_state;
-    
-    case current_state is
-      when IDLE =>
-        if write_pending = '1' then
-          next_state <= WRITE_OP;
-        elsif read_pending = '1' then
-          next_state <= READ_OP;
+        if wren = '1' then
+            wr_data_reg <= data;
+            wr_addr_reg <= wraddress;
+            wr_en_reg <= '1';
+        else
+            wr_en_reg <= '0';
         end if;
-        
-      when WRITE_OP =>
-        next_state <= WAIT_WRITE;
-        
-      when READ_OP =>
-        next_state <= WAIT_READ;
-        
-      when WAIT_WRITE =>
-        next_state <= IDLE;
-        
-      when WAIT_READ =>
-        next_state <= IDLE;
-        
-      when others =>
-        next_state <= IDLE;
-    end case;
-  end process;
-  
-  -- RAM2DDR控制信号生成
-  process(clk_200MHz_i)
-  begin
-    if rising_edge(clk_200MHz_i) then
-      -- 默认值
-      ram_cen <= '1';
-      ram_oen <= '1';
-      ram_wen <= '1';
-      ram_ub <= '0';
-      ram_lb <= '0';
-      
-      case current_state is
-        when WRITE_OP =>
-          -- 写操作设置
-          ram_a <= "00000000000000" & write_addr_reg;
-          ram_dq_i <= write_data_reg;
-          ram_cen <= '0';
-          ram_wen <= '0';
-          ram_ub <= '0'; -- 启用高字节
-          ram_lb <= '0'; -- 启用低字节
-          
-        when READ_OP =>
-          -- 读操作设置
-          ram_a <= "00000000000000" & read_addr_reg;
-          ram_cen <= '0';
-          ram_oen <= '0';
-          ram_ub <= '0'; -- 启用高字节
-          ram_lb <= '0'; -- 启用低字节
-          
-        when WAIT_READ =>
-          -- 在读等待状态保持读取信号
-          ram_cen <= '0';
-          ram_oen <= '0';
-          ram_ub <= '0';
-          ram_lb <= '0';
-          
-        when others =>
-          -- 其他状态保持高阻态
-          ram_cen <= '1';
-          ram_oen <= '1';
-          ram_wen <= '1';
-      end case;
     end if;
-  end process;
-  
-  -- 输出数据连接
-  q <= ram_dq_o;
-  
-end Behavioral;
+end process;
+
+-- Capture read requests
+process(rdclock)
+begin
+    if rising_edge(rdclock) then
+        rd_addr_reg <= rdaddress;
+        q <= rd_data_reg;
+    end if;
+end process;
+
+-- Main state machine to handle DDR operations
+process(clk_200MHz_i)
+begin
+    if rising_edge(clk_200MHz_i) then
+        if rst_i = '1' then
+            state <= IDLE;
+            ram_cen <= '1';
+            ram_oen <= '1';
+            ram_wen <= '1';
+            ram_ub <= '0';
+            ram_lb <= '0';
+        else
+            case state is
+                when IDLE =>
+                    ram_cen <= '1';
+                    ram_oen <= '1';
+                    ram_wen <= '1';
+                    
+                    -- Priority to write operations
+                    if wr_en_reg = '1' then
+                        state <= WRITING;
+                        ram_addr <= "00000000000000" & wr_addr_reg;
+                        ram_dq_i <= wr_data_reg;
+                        ram_cen <= '0';
+                        ram_wen <= '0';
+                        ram_ub <= '0';
+                        ram_lb <= '0';
+                    -- Then handle reads
+                    elsif rd_addr_reg /= rdaddress then
+                        state <= READING;
+                        ram_addr <= "00000000000000" & rd_addr_reg;
+                        ram_cen <= '0';
+                        ram_oen <= '0';
+                        ram_ub <= '0';
+                        ram_lb <= '0';
+                    end if;
+                
+                when WRITING =>
+                    -- Write operation completed
+                    ram_cen <= '1';
+                    ram_wen <= '1';
+                    state <= IDLE;
+                
+                when READING =>
+                    -- Read operation completed
+                    ram_cen <= '1';
+                    ram_oen <= '1';
+                    rd_data_reg <= ram_dq_o;
+                    state <= IDLE;
+                
+                when others =>
+                    state <= IDLE;
+            end case;
+        end if;
+    end if;
+end process;
+
+end rtl;
