@@ -5,239 +5,255 @@
 -- this results in a strectched 80 x 60 downscale into 480 x 640.
 ----------------------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+LIBRARY IEEE;
+USE IEEE.STD_LOGIC_1164.ALL;
+USE IEEE.NUMERIC_STD.ALL;
 
-entity vga_driver is
-  Port ( 
-	 iVGA_CLK	    : in  STD_LOGIC;
-	 r	    : out STD_LOGIC_VECTOR(3 downto 0);
-	 g	    : out STD_LOGIC_VECTOR(3 downto 0);
-	 b	    : out STD_LOGIC_VECTOR(3 downto 0);
-	 hs	    : out STD_LOGIC;
-	 vs	    : out STD_LOGIC;
-	 surv : in std_logic;
-	 rgb : in std_logic;
-	 debug : in natural;
-	 debug2 : in natural;
-	 buffer_addr : out STD_LOGIC_VECTOR(12 downto 0);
-	 buffer_data : in  STD_LOGIC_VECTOR(15 downto 0);
-	 newframe : out std_logic;
-	 leftmotion : out natural;
-	 rightmotion : out natural
-       );
-end vga_driver;
+ENTITY vga_driver IS
+	PORT (
+		iVGA_CLK : IN STD_LOGIC;
+		r : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
+		g : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
+		b : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
 
-architecture Behavioral of vga_driver is
+		display_mode : IN STD_LOGIC; -- 显示模式: 0=原画面, 1=直方图
+		hist_pixel : IN STD_LOGIC_VECTOR(11 DOWNTO 0); -- 来自直方图模块的像素
 
-  constant hRes       : natural := 640;
-  constant vRes       : natural := 480;
+		hs : OUT STD_LOGIC;
+		vs : OUT STD_LOGIC;
+		surv : IN STD_LOGIC;
+		rgb : IN STD_LOGIC;
+		debug : IN NATURAL;
+		debug2 : IN NATURAL;
+		buffer_addr : OUT STD_LOGIC_VECTOR(12 DOWNTO 0);
+		buffer_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+		newframe : OUT STD_LOGIC;
+		leftmotion : OUT NATURAL;
+		rightmotion : OUT NATURAL
 
-  constant hMax  : natural := 799;
-  constant hStartSync : natural := 656;
-  constant hEndSync   : natural := 752;
+	);
+END vga_driver;
 
-  constant vMax  : natural := 524;
-  constant vStartSync : natural := 490;
-  constant vEndSync   : natural := 491;
+ARCHITECTURE Behavioral OF vga_driver IS
 
-  signal hCount : unsigned(9 downto 0) := (others => '0');
-  signal vCount : unsigned(9 downto 0) := (others => '0');
-  signal address : unsigned(16 downto 0) := (others => '0');
-  signal blank : std_logic := '1';
-  signal compare : 	 std_logic := '0';
-  signal tempbuff : std_logic := '1';
+	CONSTANT hRes : NATURAL := 640;
+	CONSTANT vRes : NATURAL := 480;
 
-  signal sumright : natural := 0;
-  signal sumleft : natural := 0;
-begin
-  buffer_addr <= std_logic_vector(address(15 downto 3)); 
+	CONSTANT hMax : NATURAL := 799;
+	CONSTANT hStartSync : NATURAL := 656;
+	CONSTANT hEndSync : NATURAL := 752;
 
-  process(iVGA_CLK)
-    variable r0    : unsigned (3 downto 0);
-    variable g0	    :  unsigned (3 downto 0);
-    variable b0	    :  unsigned (3 downto 0); 
+	CONSTANT vMax : NATURAL := 524;
+	CONSTANT vStartSync : NATURAL := 490;
+	CONSTANT vEndSync : NATURAL := 491;
 
-  begin
+	SIGNAL hCount : unsigned(9 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL vCount : unsigned(9 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL address : unsigned(16 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL blank : STD_LOGIC := '1';
+	SIGNAL compare : STD_LOGIC := '0';
+	SIGNAL tempbuff : STD_LOGIC := '1';
 
-    if rising_edge(iVGA_CLK) then
-      if surv = '0' then
-	sumleft <= 0;
-	sumright <= 0;
-	if hCount = hMax then
-	  hCount <= (others => '0');
-	  if vCount = vMax then
-	    vCount <= (others => '0');
-	  else
-	    vCount <= vCount+1;
-	  end if;
-	else
-	  hCount <= hCount+1;
-	end if;
+	SIGNAL sumright : NATURAL := 0;
+	SIGNAL sumleft : NATURAL := 0;
+BEGIN
+	buffer_addr <= STD_LOGIC_VECTOR(address(15 DOWNTO 3));
 
-	if blank = '0' then 
-	  g  <= buffer_data(11 downto 8);
-	  r  <= buffer_data(7 downto 4);
-	  b  <= buffer_data(3 downto 0);
-	else
-	  r  <= (others => '0');
-	  g  <= (others => '0');
-	  b  <= (others => '0');
-	end if;
+	PROCESS (iVGA_CLK)
+		VARIABLE r0 : unsigned (3 DOWNTO 0);
+		VARIABLE g0 : unsigned (3 DOWNTO 0);
+		VARIABLE b0 : unsigned (3 DOWNTO 0);
 
+	BEGIN
 
-	if vCount  >= vRes then
-	  address <= (others => '0');
-	  blank <= '1';
-	else	
-	  if hCount < hRes then
-	    blank <= '0';
-	    if hCount = hRes-1 then 
-	      if vCount( 2 downto 0 ) /= "111" then
-		address <= address - hRes +1; ---debug +debug2; -- I dont know why its 641 (/8 = 81). But it works.
-	      else
-		address <= address+1;
-	      end if;
-	    elsif vCount( 1 ) /= '1' then -- Blank every other
-	      blank <='1';
-	      address <= address+1;
-	    else
-	      address <= address+1;
-	    end if;
-	  else
-	    blank <= '1';
-	  end if;
-	end if;
+		IF rising_edge(iVGA_CLK) THEN
+			IF surv = '0' THEN
+				sumleft <= 0;
+				sumright <= 0;
+				IF hCount = hMax THEN
+					hCount <= (OTHERS => '0');
+					IF vCount = vMax THEN
+						vCount <= (OTHERS => '0');
+					ELSE
+						vCount <= vCount + 1;
+					END IF;
+				ELSE
+					hCount <= hCount + 1;
+				END IF;
 
-	if hCount >= hStartSync and hCount < hEndSync then
-	  hs <= '1';
-	else
-	  hs <= '0';
-	end if;
+				IF display_mode = '0' OR surv = '1' THEN
+					-- 原始画面显示（保留现有逻辑）
+					IF blank = '0' THEN
+						g <= buffer_data(11 DOWNTO 8);
+						r <= buffer_data(7 DOWNTO 4);
+						b <= buffer_data(3 DOWNTO 0);
+					ELSE
+						r <= (OTHERS => '0');
+						g <= (OTHERS => '0');
+						b <= (OTHERS => '0');
+					END IF;
+				ELSE
+					-- 直方图显示
+					IF blank = '0' THEN
+						r <= hist_pixel(11 DOWNTO 8);
+						g <= hist_pixel(7 DOWNTO 4);
+						b <= hist_pixel(3 DOWNTO 0);
+					ELSE
+						r <= (OTHERS => '0');
+						g <= (OTHERS => '0');
+						b <= (OTHERS => '0');
+					END IF;
+				END IF;
 
-	if vCount >= vStartSync and vCount < vEndSync then
-	  vs <= '1';
-	else
-	  vs <= '0';
-	end if;
+				IF vCount >= vRes THEN
+					address <= (OTHERS => '0');
+					blank <= '1';
+				ELSE
+					IF hCount < hRes THEN
+						blank <= '0';
+						IF hCount = hRes - 1 THEN
+							IF vCount(2 DOWNTO 0) /= "111" THEN
+								address <= address - hRes + 1; ---debug +debug2; -- I dont know why its 641 (/8 = 81). But it works.
+							ELSE
+								address <= address + 1;
+							END IF;
+						ELSIF vCount(1) /= '1' THEN -- Blank every other
+							blank <= '1';
+							address <= address + 1;
+						ELSE
+							address <= address + 1;
+						END IF;
+					ELSE
+						blank <= '1';
+					END IF;
+				END IF;
 
-      else--	if surv = '1' then
-	if hCount = hMax then
-	  hCount <= (others => '0');
-	  if vCount = vMax then
-	    vCount <= (others => '0');
-	    sumleft <= 0;
-	    sumright <= 0;
-	  else
-	    vCount <= vCount+1;
-	  end if;
+				IF hCount >= hStartSync AND hCount < hEndSync THEN
+					hs <= '1';
+				ELSE
+					hs <= '0';
+				END IF;
 
-	else
-	  if hCount = hRes/2 then
-	    leftmotion <= sumleft;
-	    rightmotion <= sumright;
-	  end if;
-	  hCount <= hCount+1;
-	end if;
+				IF vCount >= vStartSync AND vCount < vEndSync THEN
+					vs <= '1';
+				ELSE
+					vs <= '0';
+				END IF;
 
-	if blank = '0' then 
-	    if compare = '0' then
-		g0  := unsigned(buffer_data(11 downto 8));
-		r0  := unsigned(buffer_data(7 downto 4));
-		b0  := unsigned(buffer_data(3 downto 0));
-	      g  <= buffer_data(11 downto 8);
-	      r  <= buffer_data(7 downto 4);
-	      b  <= buffer_data(3 downto 0);
-	    else 
-              if (abs(to_integer(unsigned(buffer_data(7 downto 4))) - to_integer(r0)) +
-	      abs(to_integer(unsigned(buffer_data(11 downto 8))) - to_integer(g0)) +
-	      abs(to_integer(unsigned(buffer_data(3 downto 0))) - to_integer(b0))) 
-	      > 15+debug-debug then--+ debug - debug2 then
-		g <= "1111";
+			ELSE--	if surv = '1' then
+				IF hCount = hMax THEN
+					hCount <= (OTHERS => '0');
+					IF vCount = vMax THEN
+						vCount <= (OTHERS => '0');
+						sumleft <= 0;
+						sumright <= 0;
+					ELSE
+						vCount <= vCount + 1;
+					END IF;
 
-		if hCount < hres/2 then
-		  sumleft <= sumleft + 1;
-		else
-		  sumright <= sumright + 1;
-		end if;
+				ELSE
+					IF hCount = hRes/2 THEN
+						leftmotion <= sumleft;
+						rightmotion <= sumright;
+					END IF;
+					hCount <= hCount + 1;
+				END IF;
 
-	      else
-	      g  <= buffer_data(11 downto 8);
-	      r  <= buffer_data(7 downto 4);
-	      b  <= buffer_data(3 downto 0);
-	      end if;
+				IF blank = '0' THEN
+					IF compare = '0' THEN
+						g0 := unsigned(buffer_data(11 DOWNTO 8));
+						r0 := unsigned(buffer_data(7 DOWNTO 4));
+						b0 := unsigned(buffer_data(3 DOWNTO 0));
+						g <= buffer_data(11 DOWNTO 8);
+						r <= buffer_data(7 DOWNTO 4);
+						b <= buffer_data(3 DOWNTO 0);
+					ELSE
+						IF (ABS(to_integer(unsigned(buffer_data(7 DOWNTO 4))) - to_integer(r0)) +
+							ABS(to_integer(unsigned(buffer_data(11 DOWNTO 8))) - to_integer(g0)) +
+							ABS(to_integer(unsigned(buffer_data(3 DOWNTO 0))) - to_integer(b0)))
+							> 15 + debug - debug THEN--+ debug - debug2 then
+							g <= "1111";
 
-	    end if;
-	else
-	  r   <= (others => '0');
-	  g <= (others => '0');
-	  b  <= (others => '0');
-	end if;
+							IF hCount < hres/2 THEN
+								sumleft <= sumleft + 1;
+							ELSE
+								sumright <= sumright + 1;
+							END IF;
 
+						ELSE
+							g <= buffer_data(11 DOWNTO 8);
+							r <= buffer_data(7 DOWNTO 4);
+							b <= buffer_data(3 DOWNTO 0);
+						END IF;
 
-	if vCount  < vRes/2 then
-	  if hCount < hRes then
-	    blank <= '0';
-	    if hCount = hRes-1 then 
-	      if vCount( 2 downto 0 ) /= "111" then
-		address <= address - hRes +1; --+1 for address, address 0 read already
-	      else
-		if compare = '0' then
-		  address <= address+19200; -- 2400 * 8.		
-		  compare <= '1';
-		else
-		  address <= address-19198;
-		  compare <= '0';
-		  tempbuff <= '1';
-		end if;
-	      end if;
-	    elsif vCount( 1 ) /= '1' then 
-	      blank <='1';
-	      address <= address+1;
-	    else --Because this counts up to 640, then it gets subtracted. The compare flag should go in the top if statement
-	      address <= address+1;
-	    end if;
-	  else
-	    blank <= '1';
-	  end if;
-	elsif vCount < vRes then
+					END IF;
+				ELSE
+					r <= (OTHERS => '0');
+					g <= (OTHERS => '0');
+					b <= (OTHERS => '0');
+				END IF;
+				IF vCount < vRes/2 THEN
+					IF hCount < hRes THEN
+						blank <= '0';
+						IF hCount = hRes - 1 THEN
+							IF vCount(2 DOWNTO 0) /= "111" THEN
+								address <= address - hRes + 1; --+1 for address, address 0 read already
+							ELSE
+								IF compare = '0' THEN
+									address <= address + 19200; -- 2400 * 8.		
+									compare <= '1';
+								ELSE
+									address <= address - 19198;
+									compare <= '0';
+									tempbuff <= '1';
+								END IF;
+							END IF;
+						ELSIF vCount(1) /= '1' THEN
+							blank <= '1';
+							address <= address + 1;
+						ELSE --Because this counts up to 640, then it gets subtracted. The compare flag should go in the top if statement
+							address <= address + 1;
+						END IF;
+					ELSE
+						blank <= '1';
+					END IF;
+				ELSIF vCount < vRes THEN
 
-	  if hCount < hRes then
-	    blank <= '0';
-	    if hCount = hRes-1 then 
-	      if vCount( 2 downto 0 ) /= "111" then
-		address <= address - hRes +1; ---debug +debug2; --+1 for address, address 0 read already
-	      else
-		address <= address+1;
-	      end if;
-	    elsif vCount( 1 ) /= '1' then -- Blank every other
-	      blank <='1';
-	      address <= address+1;
-	    else
-	      address <= address+1;
-	    end if;
-	  else
-	    blank <= '1';
-	  end if;
-	else
-	  address <= (others => '0');
-	  blank <= '1';
-	end if;
+					IF hCount < hRes THEN
+						blank <= '0';
+						IF hCount = hRes - 1 THEN
+							IF vCount(2 DOWNTO 0) /= "111" THEN
+								address <= address - hRes + 1; ---debug +debug2; --+1 for address, address 0 read already
+							ELSE
+								address <= address + 1;
+							END IF;
+						ELSIF vCount(1) /= '1' THEN -- Blank every other
+							blank <= '1';
+							address <= address + 1;
+						ELSE
+							address <= address + 1;
+						END IF;
+					ELSE
+						blank <= '1';
+					END IF;
+				ELSE
+					address <= (OTHERS => '0');
+					blank <= '1';
+				END IF;
 
-	if hCount >= hStartSync and hCount < hEndSync then
-	  hs <= '1';
-	else
-	  hs <= '0';
-	end if;
+				IF hCount >= hStartSync AND hCount < hEndSync THEN
+					hs <= '1';
+				ELSE
+					hs <= '0';
+				END IF;
 
-	if vCount >= vStartSync and vCount < vEndSync then
-	  vs <= '1';
-	else
-	  vs <= '0';
-	end if;
+				IF vCount >= vStartSync AND vCount < vEndSync THEN
+					vs <= '1';
+				ELSE
+					vs <= '0';
+				END IF;
 
-      end if; -- end surv
-    end if; -- end rising edge
-  end process;
-end Behavioral;
+			END IF; -- end surv
+		END IF; -- end rising edge
+	END PROCESS;
+END Behavioral;

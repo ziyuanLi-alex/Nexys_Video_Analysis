@@ -96,7 +96,7 @@ ARCHITECTURE rtl OF Project1_top IS
       clk_in : IN STD_LOGIC
     );
   END COMPONENT;
-  
+
   COMPONENT OV7670_driver
     PORT (
       iclk50 : IN STD_LOGIC;
@@ -135,20 +135,25 @@ ARCHITECTURE rtl OF Project1_top IS
       r : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
       g : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
       b : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
+
+      display_mode : IN STD_LOGIC; -- 显示模式: 0=原画面, 1=直方图
+      hist_pixel : IN STD_LOGIC_VECTOR(11 DOWNTO 0); -- 来自直方图模块的像素
+
       hs : OUT STD_LOGIC;
       vs : OUT STD_LOGIC;
       surv : IN STD_LOGIC;
       rgb : IN STD_LOGIC;
       debug : IN NATURAL;
       debug2 : IN NATURAL;
+      buffer_addr : OUT STD_LOGIC_VECTOR(12 DOWNTO 0);
+      buffer_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
       newframe : OUT STD_LOGIC;
       leftmotion : OUT NATURAL;
-      rightmotion : OUT NATURAL;
-      buffer_addr : OUT STD_LOGIC_VECTOR(12 DOWNTO 0);
-      buffer_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0)
+      rightmotion : OUT NATURAL
+
     );
   END COMPONENT;
-  
+
   -- The frame buffer is reference by OVdriver
   -- and data input is by OVCapture
   COMPONENT framebuffer
@@ -160,6 +165,19 @@ ARCHITECTURE rtl OF Project1_top IS
       rdaddress : IN STD_LOGIC_VECTOR (12 DOWNTO 0);
       rdclock : IN STD_LOGIC;
       q : OUT STD_LOGIC_VECTOR (15 DOWNTO 0)--data OUT
+    );
+  END COMPONENT;
+
+  COMPONENT histogram_generator
+    PORT (
+      pclk : IN STD_LOGIC;
+      vsync : IN STD_LOGIC;
+      pixel_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+      pixel_valid : IN STD_LOGIC;
+      vga_clk : IN STD_LOGIC;
+      vga_x : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
+      vga_y : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
+      hist_pixel : OUT STD_LOGIC_VECTOR(11 DOWNTO 0) -- R(4),G(4),B(4)
     );
   END COMPONENT;
 
@@ -223,11 +241,12 @@ ARCHITECTURE rtl OF Project1_top IS
   SIGNAL AUD_CTRL_CLK : STD_LOGIC;
   SIGNAL buzzer : STD_LOGIC := '0';
   SIGNAL buzzercnt : unsigned(31 DOWNTO 0);
-  
-  -- DDR相关信号
-  SIGNAL rst_ddr : STD_LOGIC := '0'; -- Reset for ddr_framebuffer
-  SIGNAL device_temp : STD_LOGIC_VECTOR(11 DOWNTO 0) := (OTHERS => '0'); -- Device temperature for DDR
-  
+
+  SIGNAL display_mode : STD_LOGIC := '0';
+  SIGNAL hist_pixel : STD_LOGIC_VECTOR(11 DOWNTO 0);
+  SIGNAL vga_x : STD_LOGIC_VECTOR(9 DOWNTO 0);
+  SIGNAL vga_y : STD_LOGIC_VECTOR(9 DOWNTO 0);
+
 BEGIN
 
   ----------------------------------------------------------------
@@ -239,28 +258,16 @@ BEGIN
   WITH KEY(2) SELECT key2push <= '1' WHEN '0', '0' WHEN OTHERS;
   WITH KEY(3) SELECT key3push <= '1' WHEN '0', '0' WHEN OTHERS;
   --SW1 to 6 used by ovregisters
-  WITH SW(0) SELECT rgb <= '1' WHEN '1', '0' WHEN OTHERS;
-  WITH SW(5) SELECT sw5 <= '1' WHEN '1', '0' WHEN OTHERS;
-  WITH SW(6) SELECT sw6 <= '1' WHEN '1', '0' WHEN OTHERS;
-  WITH SW(7) SELECT surveillance <= '1' WHEN '1', '0' WHEN OTHERS;
-  WITH SW(8) SELECT surveillance2 <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(0) SELECT rgb <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(5) SELECT sw5 <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(6) SELECT sw6 <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(7) SELECT surveillance <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(8) SELECT surveillance2 <= '1' WHEN '1', '0' WHEN OTHERS;
+  WITH SW(8) SELECT display_mode <= '1' WHEN '1', '0' WHEN OTHERS;
 
   OV7670_RESET <= '1'; -- Normal mode
   OV7670_PWDN <= '0'; -- Power device up
   OV7670_XCLK <= clk_25M; -- 使用从clk_wiz_0生成的25MHz时钟
-
-  -- 生成DDR复位信号
-  PROCESS(clk_50M)
-  BEGIN
-    IF rising_edge(clk_50M) THEN
-      -- 在上电后短暂保持复位状态
-      IF cnt < 1000 THEN
-        rst_ddr <= '1';
-      ELSE
-        rst_ddr <= '0';
-      END IF;
-    END IF;
-  END PROCESS;
 
   -- 时钟生成器
   clk_wiz : clk_wiz_0
@@ -295,7 +302,7 @@ BEGIN
     sw => SW,
     key => KEY
   );
-  
+
   -- VGA驱动
   vgadr : vga_driver PORT MAP
   (
@@ -313,7 +320,11 @@ BEGIN
     leftmotion => leftmotion,
     rightmotion => rightmotion,
     buffer_addr => buffer_addr,
-    buffer_data => buffer_data
+    buffer_data => buffer_data,
+
+    display_mode => display_mode,
+    hist_pixel => hist_pixel
+
   );
 
   -- 摄像头数据捕获
@@ -337,15 +348,28 @@ BEGIN
     rdclock => clk_50M,
     rdaddress => buffer_addr,
     q => buffer_data,
-  
     wrclock => OV7670_PCLK,
     wraddress => capture_addr,
     data => capture_data,
     wren => capture_we
   );
 
+  -- Histogram generator
+  histgen : histogram_generator PORT MAP
+  (
+    pclk => OV7670_PCLK,
+    vsync => OV7670_VSYNC,
+    pixel_data => capture_data,
+    pixel_valid => capture_we,
+    vga_clk => clk_25M,
+    vga_x => vga_x,
+    vga_y => vga_y,
+    hist_pixel => hist_pixel
+  );
+
   ----------------------------------------------------------------
   --- Processes
+  ----------------------------------------------------------------
   ----------------------------------------------------------------
   PROCESS (clk_50M)
   BEGIN
@@ -359,7 +383,7 @@ BEGIN
 
       -- 将最大运动值显示在七段数码管上
       -- mSEG7 <= std_logic_vector(to_unsigned(max, mSEG7'length));
-      
+
       -- 监控模式检测
       -- survmode <= surveillance OR surveillance2;
     END IF;
