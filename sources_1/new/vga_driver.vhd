@@ -4,7 +4,7 @@ USE IEEE.NUMERIC_STD.ALL;
 
 ENTITY vga_driver IS
     GENERIC (
-        -- VGA Timing parameters (default 640x480 @ 60Hz)
+        -- VGA时序参数 (默认640x480 @ 60Hz)
         H_VISIBLE_AREA : INTEGER := 640;
         H_FRONT_PORCH  : INTEGER := 16;
         H_SYNC_PULSE   : INTEGER := 96;
@@ -16,92 +16,110 @@ ENTITY vga_driver IS
         V_BACK_PORCH   : INTEGER := 33;
         V_WHOLE_FRAME  : INTEGER := 525;
         
-        -- Frame buffer dimensions (for the 80x60 test pattern)
-        FB_WIDTH       : INTEGER := 80;
-        FB_HEIGHT      : INTEGER := 60;
+        -- 帧缓冲区尺寸 - 已更新为320x240
+        FB_WIDTH       : INTEGER := 320;
+        FB_HEIGHT      : INTEGER := 240;
         
-        -- Color format (default RGB565)
+        -- 颜色格式 (默认RGB565)
         RED_BITS       : INTEGER := 5;
         GREEN_BITS     : INTEGER := 6;
         BLUE_BITS      : INTEGER := 5;
         
-        -- Output color depth (VGA output bits per color)
+        -- 输出颜色深度 (VGA输出每种颜色的位数)
         OUTPUT_BITS    : INTEGER := 4
     );
     PORT (
-        -- Clock and reset
-        clk            : IN  STD_LOGIC;  -- Pixel clock
-        rst            : IN  STD_LOGIC;  -- Reset signal
+        -- 时钟和复位
+        clk            : IN  STD_LOGIC;  -- 像素时钟
+        rst            : IN  STD_LOGIC;  -- 复位信号
         
-        -- Frame buffer interface
-        fb_addr        : OUT STD_LOGIC_VECTOR(12 DOWNTO 0);  -- For 80x60 = 4800 pixels
-        fb_data        : IN  STD_LOGIC_VECTOR(15 DOWNTO 0);  -- RGB565 pixel data
+        -- 帧缓冲区接口 - 已更新为17位地址宽度
+        fb_addr        : OUT STD_LOGIC_VECTOR(16 DOWNTO 0);  -- 对应320x240 = 76800像素
+        fb_data        : IN  STD_LOGIC_VECTOR(15 DOWNTO 0);  -- RGB565像素数据
         
-        -- VGA outputs
+        -- VGA输出
         hsync          : OUT STD_LOGIC;
         vsync          : OUT STD_LOGIC;
         red            : OUT STD_LOGIC_VECTOR(OUTPUT_BITS-1 DOWNTO 0);
         green          : OUT STD_LOGIC_VECTOR(OUTPUT_BITS-1 DOWNTO 0);
         blue           : OUT STD_LOGIC_VECTOR(OUTPUT_BITS-1 DOWNTO 0);
         
-        -- Display resolution selection (optional for future use)
+        -- 显示分辨率选择 (可选，用于未来扩展)
         resolution_sel : IN  STD_LOGIC_VECTOR(1 DOWNTO 0) := "00"  -- 00: 640x480, 01: 320x240, 10: 800x600
     );
 END ENTITY vga_driver;
 
 ARCHITECTURE Behavioral OF vga_driver IS
-    -- Horizontal and vertical counters
+    -- 水平和垂直计数器
     SIGNAL h_count    : INTEGER RANGE 0 TO H_WHOLE_LINE-1 := 0;
     SIGNAL v_count    : INTEGER RANGE 0 TO V_WHOLE_FRAME-1 := 0;
     
-    -- Display active region flags
+    -- 显示活动区域标志
     SIGNAL h_active   : STD_LOGIC := '0';
     SIGNAL v_active   : STD_LOGIC := '0';
     SIGNAL display_on : STD_LOGIC := '0';
     
-    -- Pixel coordinates within the display area
+    -- 显示区域内的像素坐标
     SIGNAL x_pos      : INTEGER RANGE 0 TO H_VISIBLE_AREA-1 := 0;
     SIGNAL y_pos      : INTEGER RANGE 0 TO V_VISIBLE_AREA-1 := 0;
     
-    -- Frame buffer address calculation
+    -- 帧缓冲区地址计算
     SIGNAL fb_x       : INTEGER RANGE 0 TO FB_WIDTH-1 := 0;
     SIGNAL fb_y       : INTEGER RANGE 0 TO FB_HEIGHT-1 := 0;
     SIGNAL fb_index   : INTEGER RANGE 0 TO FB_WIDTH*FB_HEIGHT-1 := 0;
     
-    -- Color component extraction
-    SIGNAL pixel_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+    -- 颜色分量提取
     SIGNAL r_data     : STD_LOGIC_VECTOR(RED_BITS-1 DOWNTO 0);
     SIGNAL g_data     : STD_LOGIC_VECTOR(GREEN_BITS-1 DOWNTO 0);
     SIGNAL b_data     : STD_LOGIC_VECTOR(BLUE_BITS-1 DOWNTO 0);
     
-    -- Scaling factors (can be adjusted based on resolution_sel)
-    CONSTANT SCALE_X  : INTEGER := H_VISIBLE_AREA / FB_WIDTH;  -- Default for 640x480
-    CONSTANT SCALE_Y  : INTEGER := V_VISIBLE_AREA / FB_HEIGHT; -- Default for 640x480
+    -- 缩放因子 - 根据新的帧缓冲区分辨率更新
+    SIGNAL scale_x    : INTEGER := 2;  -- 640/320 = 2
+    SIGNAL scale_y    : INTEGER := 2;  -- 480/240 = 2
     
-    -- Pre-calculated address pipeline
+    -- 预计算地址流水线
     SIGNAL addr_valid : STD_LOGIC := '0';
-    SIGNAL fb_addr_reg : STD_LOGIC_VECTOR(12 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL fb_addr_reg : STD_LOGIC_VECTOR(16 DOWNTO 0) := (OTHERS => '0');
     
 BEGIN
-    -- VGA timing generation process
+    -- 根据分辨率选择更新缩放因子
+    resolution_process: PROCESS(resolution_sel)
+    BEGIN
+        CASE resolution_sel IS
+            WHEN "00" =>  -- 640x480显示，320x240缓冲区
+                scale_x <= 2;  -- 640/320
+                scale_y <= 2;  -- 480/240
+            WHEN "01" =>  -- 320x240显示，320x240缓冲区 (1:1映射)
+                scale_x <= 1;
+                scale_y <= 1;
+            WHEN "10" =>  -- 800x600显示，320x240缓冲区
+                scale_x <= 2;  -- 将像素复制更多次以填充更大的显示器
+                scale_y <= 2;
+            WHEN OTHERS =>
+                scale_x <= 2;
+                scale_y <= 2;
+        END CASE;
+    END PROCESS resolution_process;
+    
+    -- VGA时序生成进程
     vga_timing: PROCESS(clk)
     BEGIN
         IF rising_edge(clk) THEN
             IF rst = '1' THEN
                 h_count <= 0;
                 v_count <= 0;
-                hsync <= '1';  -- Sync pulses are active low
+                hsync <= '1';  -- 同步脉冲为低电平有效
                 vsync <= '1';
                 h_active <= '0';
                 v_active <= '0';
                 display_on <= '0';
             ELSE
-                -- Horizontal counter
+                -- 水平计数器
                 IF h_count < H_WHOLE_LINE-1 THEN
                     h_count <= h_count + 1;
                 ELSE
                     h_count <= 0;
-                    -- Vertical counter
+                    -- 垂直计数器
                     IF v_count < V_WHOLE_FRAME-1 THEN
                         v_count <= v_count + 1;
                     ELSE
@@ -109,23 +127,23 @@ BEGIN
                     END IF;
                 END IF;
                 
-                -- Generate HSYNC
+                -- 生成HSYNC
                 IF (h_count >= H_VISIBLE_AREA + H_FRONT_PORCH) AND 
                    (h_count < H_VISIBLE_AREA + H_FRONT_PORCH + H_SYNC_PULSE) THEN
-                    hsync <= '0';  -- Active low sync pulse
+                    hsync <= '0';  -- 低电平有效同步脉冲
                 ELSE
                     hsync <= '1';
                 END IF;
                 
-                -- Generate VSYNC
+                -- 生成VSYNC
                 IF (v_count >= V_VISIBLE_AREA + V_FRONT_PORCH) AND 
                    (v_count < V_VISIBLE_AREA + V_FRONT_PORCH + V_SYNC_PULSE) THEN
-                    vsync <= '0';  -- Active low sync pulse
+                    vsync <= '0';  -- 低电平有效同步脉冲
                 ELSE
                     vsync <= '1';
                 END IF;
                 
-                -- Determine active display region
+                -- 确定活动显示区域
                 IF h_count < H_VISIBLE_AREA THEN
                     h_active <= '1';
                     x_pos <= h_count;
@@ -145,58 +163,78 @@ BEGIN
         END IF;
     END PROCESS vga_timing;
     
-    -- Frame buffer address calculation - separate process to ensure proper timing
+    -- 帧缓冲区地址计算 - 单独进程确保正确的时序
     address_calc: PROCESS(clk)
         VARIABLE scaled_x : INTEGER;
         VARIABLE scaled_y : INTEGER;
     BEGIN
         IF rising_edge(clk) THEN
             IF h_active = '1' AND v_active = '1' THEN
-                -- Ensure x and y are properly bounded to prevent overflow
-                -- Scale down the display coordinates to get frame buffer coordinates
-                scaled_x := x_pos / SCALE_X;
-                scaled_y := y_pos / SCALE_Y;
-                
-                -- Make sure we don't exceed buffer dimensions
-                IF scaled_x >= FB_WIDTH THEN
-                    scaled_x := FB_WIDTH - 1;
+                -- 根据选择的缩放模式计算帧缓冲区坐标
+                IF scale_x = 1 THEN
+                    -- 1:1映射模式 (无缩放)
+                    scaled_x := x_pos;
+                    -- 确保不超出帧缓冲区边界
+                    IF scaled_x >= FB_WIDTH THEN
+                        scaled_x := FB_WIDTH - 1;
+                    END IF;
+                ELSE
+                    -- 缩放模式
+                    scaled_x := x_pos / scale_x;
+                    -- 确保不超出帧缓冲区边界
+                    IF scaled_x >= FB_WIDTH THEN
+                        scaled_x := FB_WIDTH - 1;
+                    END IF;
                 END IF;
                 
-                IF scaled_y >= FB_HEIGHT THEN
-                    scaled_y := FB_HEIGHT - 1;
+                IF scale_y = 1 THEN
+                    -- 1:1映射模式 (无缩放)
+                    scaled_y := y_pos;
+                    -- 确保不超出帧缓冲区边界
+                    IF scaled_y >= FB_HEIGHT THEN
+                        scaled_y := FB_HEIGHT - 1;
+                    END IF;
+                ELSE
+                    -- 缩放模式
+                    scaled_y := y_pos / scale_y;
+                    -- 确保不超出帧缓冲区边界
+                    IF scaled_y >= FB_HEIGHT THEN
+                        scaled_y := FB_HEIGHT - 1;
+                    END IF;
                 END IF;
                 
-                -- Calculate linear address in frame buffer
+                -- 计算帧缓冲区的线性地址
                 fb_index <= scaled_y * FB_WIDTH + scaled_x;
                 addr_valid <= '1';
             ELSE
                 addr_valid <= '0';
             END IF;
             
-            -- Register address to ensure stable output
-            fb_addr_reg <= STD_LOGIC_VECTOR(TO_UNSIGNED(fb_index, 13));
+            -- 寄存地址确保稳定输出
+            fb_addr_reg <= STD_LOGIC_VECTOR(TO_UNSIGNED(fb_index, 17));
         END IF;
     END PROCESS address_calc;
     
-    -- Output the calculated address
+    -- 输出计算的地址
     fb_addr <= fb_addr_reg;
     
-    -- Color output process
+    -- 颜色输出进程
     color_output: PROCESS(clk)
     BEGIN
         IF rising_edge(clk) THEN
             IF display_on = '1' THEN
-                -- Extract color components from the RGB565 pixel data
-                r_data <= fb_data(15 DOWNTO 11);  -- 5 bits for red
-                g_data <= fb_data(10 DOWNTO 5);   -- 6 bits for green
-                b_data <= fb_data(4 DOWNTO 0);    -- 5 bits for blue
+                -- 从RGB565像素数据中提取颜色分量
+                r_data <= fb_data(15 DOWNTO 11);  -- 红色5位
+                g_data <= fb_data(10 DOWNTO 5);   -- 绿色6位
+                b_data <= fb_data(4 DOWNTO 0);    -- 蓝色5位
                 
-                -- Output the colors with appropriate bit width conversion
+                -- 输出适当位宽转换的颜色
+                -- 对于4位输出 (取最高有效位)
                 red   <= r_data(RED_BITS-1 DOWNTO RED_BITS-OUTPUT_BITS);
                 green <= g_data(GREEN_BITS-1 DOWNTO GREEN_BITS-OUTPUT_BITS);
                 blue  <= b_data(BLUE_BITS-1 DOWNTO BLUE_BITS-OUTPUT_BITS);
             ELSE
-                -- Outside the visible area, output black
+                -- 在可见区域外输出黑色
                 red   <= (OTHERS => '0');
                 green <= (OTHERS => '0');
                 blue  <= (OTHERS => '0');

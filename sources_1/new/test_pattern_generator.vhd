@@ -4,25 +4,25 @@ USE IEEE.NUMERIC_STD.ALL;
 
 ENTITY test_pattern_generator IS
     PORT (
-        data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- Input data (unused in this module)
-        wraddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0); -- Write address (unused in this module)
-        wrclock : IN STD_LOGIC; -- Write clock
-        wren : IN STD_LOGIC; -- Write enable (used to select test pattern)
-        rdaddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0); -- Read address from VGA controller
-        rdclock : IN STD_LOGIC; -- Read clock (VGA clock)
-        q : OUT STD_LOGIC_VECTOR(15 DOWNTO 0) -- Output pixel data for test pattern
+        data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 输入数据(用于图案选择)
+        wraddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 写地址(本模块中未使用)
+        wrclock : IN STD_LOGIC; -- 写时钟
+        wren : IN STD_LOGIC; -- 写使能(用于选择测试图案)
+        rdaddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 从VGA控制器读取地址
+        rdclock : IN STD_LOGIC; -- 读时钟(VGA时钟)
+        q : OUT STD_LOGIC_VECTOR(15 DOWNTO 0) -- 测试图案的输出像素数据
     );
 END ENTITY;
 
 ARCHITECTURE Behavioral OF test_pattern_generator IS
-    -- Pattern selection register
+    -- 图案选择寄存器
     SIGNAL pattern_select : unsigned(2 DOWNTO 0) := "000";
 
-    -- Screen parameters (assuming 80x60 pixel buffer that gets scaled to 640x480)
-    CONSTANT WIDTH : INTEGER := 80;
-    CONSTANT HEIGHT : INTEGER := 60;
+    -- 屏幕参数 (320x240分辨率)
+    CONSTANT WIDTH : INTEGER := 320;
+    CONSTANT HEIGHT : INTEGER := 240;
 
-    -- Pattern colors (RGB565 format)
+    -- 图案颜色 (RGB565格式)
     CONSTANT COLOR_RED : STD_LOGIC_VECTOR(15 DOWNTO 0) := "1111100000000000"; -- F800
     CONSTANT COLOR_GREEN : STD_LOGIC_VECTOR(15 DOWNTO 0) := "0000011111100000"; -- 07E0
     CONSTANT COLOR_BLUE : STD_LOGIC_VECTOR(15 DOWNTO 0) := "0000000000011111"; -- 001F
@@ -33,103 +33,114 @@ ARCHITECTURE Behavioral OF test_pattern_generator IS
     CONSTANT COLOR_WHITE : STD_LOGIC_VECTOR(15 DOWNTO 0) := "1111111111111111"; -- FFFF
     CONSTANT COLOR_GRAY : STD_LOGIC_VECTOR(15 DOWNTO 0) := "1000010000010000"; -- 8410
 
-    -- Output register
+    -- 输出寄存器
     SIGNAL output_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
 
 BEGIN
-    -- Process for pattern selection (uses the write interface for control)
+    -- 图案选择进程(使用写接口进行控制)
     PROCESS (wrclock)
     BEGIN
         IF rising_edge(wrclock) THEN
             IF wren = '1' THEN
-                -- Use data input to select pattern
-                -- Here we're using just a few bits of the data input for pattern selection
+                -- 使用数据输入选择图案
                 pattern_select <= unsigned(data(2 DOWNTO 0));
             END IF;
         END IF;
     END PROCESS;
 
-    -- Process for generating test patterns
+    -- 生成测试图案进程
     PROCESS (rdclock)
         VARIABLE x_pos, y_pos : INTEGER;
         VARIABLE addr_int : INTEGER;
         VARIABLE color : STD_LOGIC_VECTOR(15 DOWNTO 0);
-        VARIABLE intensity : unsigned(4 DOWNTO 0);
+        VARIABLE bar_width : INTEGER;
+        VARIABLE checker_size : INTEGER;
+        VARIABLE radius_sq, center_dist_sq : INTEGER;
     BEGIN
         IF rising_edge(rdclock) THEN
-            -- Convert address to coordinates
+            -- 将地址转换为坐标
             addr_int := to_integer(unsigned(rdaddress));
             x_pos := addr_int MOD WIDTH;
             y_pos := addr_int / WIDTH;
 
-            -- Select pattern based on pattern_select
+            -- 根据pattern_select选择图案
             CASE pattern_select IS
-                    -- Color bars (vertical)
+                -- 彩色条纹 (垂直) - 调整为320x240分辨率
                 WHEN "000" =>
-                    IF x_pos < 10 THEN -- 1. 左边第一条：白色
+                    -- 计算每个条纹的宽度 (320/8 = 40像素)
+                    bar_width := 40;
+                    
+                    IF x_pos < bar_width THEN 
                         color := COLOR_WHITE;
-                    ELSIF x_pos < 20 THEN -- 2. 左边第二条：黄色
+                    ELSIF x_pos < bar_width * 2 THEN 
                         color := COLOR_YELLOW;
-                    ELSIF x_pos < 30 THEN -- 3. 左边第三条：青色
+                    ELSIF x_pos < bar_width * 3 THEN
                         color := COLOR_CYAN;
-                    ELSIF x_pos < 40 THEN -- 4. 左边第四条：绿色
+                    ELSIF x_pos < bar_width * 4 THEN
                         color := COLOR_GREEN;
-                    ELSIF x_pos < 50 THEN -- 5. 左边第五条：品红色
+                    ELSIF x_pos < bar_width * 5 THEN
                         color := COLOR_MAGENTA;
-                    ELSIF x_pos < 60 THEN -- 6. 左边第六条：红色
+                    ELSIF x_pos < bar_width * 6 THEN
                         color := COLOR_RED;
-                    ELSIF x_pos < 70 THEN -- 7. 左边第七条：蓝色
+                    ELSIF x_pos < bar_width * 7 THEN
                         color := COLOR_BLUE;
-                    ELSE -- 8. 右边剩余部分：黑色
+                    ELSE
                         color := COLOR_BLACK;
                     END IF;
 
-                    -- Checkerboard pattern
+                -- 棋盘格图案 - 调整为320x240分辨率
                 WHEN "001" =>
-                    IF ((x_pos / 10) MOD 2 = 0) XOR ((y_pos / 10) MOD 2 = 0) THEN
+                    checker_size := 20; -- 20x20像素棋盘格
+                    IF ((x_pos / checker_size) MOD 2 = 0) XOR ((y_pos / checker_size) MOD 2 = 0) THEN
                         color := COLOR_WHITE;
                     ELSE
                         color := COLOR_BLACK;
                     END IF;
+
+                -- 同心圆图案 - 调整为320x240分辨率
                 WHEN "010" =>
-                    -- 在屏幕中心绘制同心圆，如果是80x60分辨率会看起来很粗糙，640x480会更精细
-                    IF ((x_pos - WIDTH/2) * (x_pos - WIDTH/2) + (y_pos - HEIGHT/2) * (y_pos - HEIGHT/2)) < (WIDTH/8) * (WIDTH/8) THEN
+                    -- 预先计算半径的平方值以减少复杂度
+                    center_dist_sq := (x_pos - WIDTH/2) * (x_pos - WIDTH/2) + (y_pos - HEIGHT/2) * (y_pos - HEIGHT/2);
+                    
+                    -- 第一个圆 (红色)
+                    radius_sq := (WIDTH/8) * (WIDTH/8);
+                    IF center_dist_sq < radius_sq THEN
                         color := COLOR_RED;
-                    ELSIF ((x_pos - WIDTH/2) * (x_pos - WIDTH/2) + (y_pos - HEIGHT/2) * (y_pos - HEIGHT/2)) < (WIDTH/6) * (WIDTH/6) THEN
+                    -- 第二个圆 (白色)
+                    ELSIF center_dist_sq < (WIDTH/6) * (WIDTH/6) THEN
                         color := COLOR_WHITE;
-                    ELSIF ((x_pos - WIDTH/2) * (x_pos - WIDTH/2) + (y_pos - HEIGHT/2) * (y_pos - HEIGHT/2)) < (WIDTH/4) * (WIDTH/4) THEN
+                    -- 第三个圆 (蓝色)
+                    ELSIF center_dist_sq < (WIDTH/4) * (WIDTH/4) THEN
                         color := COLOR_BLUE;
                     ELSE
                         color := COLOR_BLACK;
                     END IF;
 
-                    -- Crosshatch grid
+                -- 网格图案 - 调整为320x240分辨率
                 WHEN "011" =>
-                    IF (x_pos MOD 8 = 0) OR (y_pos MOD 8 = 0) THEN
+                    IF (x_pos MOD 16 = 0) OR (y_pos MOD 16 = 0) THEN
                         color := COLOR_WHITE;
                     ELSE
                         color := COLOR_BLACK;
                     END IF;
-                    -- 模拟直方图图案 (修改"100"图案) - 类似histogram_generator的输出
+
+                -- 直方图图案 - 调整为320x240分辨率
                 WHEN "100" =>
                     -- 分三区域：红色(左)、绿色(中)、蓝色(右)柱状图
                     IF x_pos < WIDTH/3 THEN -- 红色区域
-                        -- 生成高度不同的柱状图
-                        IF y_pos > (HEIGHT - 5 - (x_pos * 3) MOD HEIGHT/2) THEN
+                        IF y_pos > (HEIGHT - 5 - (x_pos * 3) MOD (HEIGHT/2)) THEN
                             color := COLOR_RED;
                         ELSE
                             color := COLOR_BLACK;
                         END IF;
                     ELSIF x_pos < 2 * WIDTH/3 THEN -- 绿色区域
-                        -- 不同的柱状模式
-                        IF y_pos > (HEIGHT - 5 - ((x_pos - WIDTH/3) * 5) MOD HEIGHT/2) THEN
+                        IF y_pos > (HEIGHT - 5 - ((x_pos - WIDTH/3) * 5) MOD (HEIGHT/2)) THEN
                             color := COLOR_GREEN;
                         ELSE
                             color := COLOR_BLACK;
                         END IF;
                     ELSE -- 蓝色区域
-                        -- 又一种不同的柱状模式
-                        IF y_pos > (HEIGHT - 5 - ((x_pos - 2 * WIDTH/3) * 4) MOD HEIGHT/2) THEN -- 计算蓝色柱子的高度
+                        IF y_pos > (HEIGHT - 5 - ((x_pos - 2 * WIDTH/3) * 4) MOD (HEIGHT/2)) THEN
                             color := COLOR_BLUE;
                         ELSE
                             color := COLOR_BLACK;
@@ -137,41 +148,42 @@ BEGIN
                     END IF;
 
                     -- 添加水平网格线
-                    IF y_pos MOD 10 = 0 THEN -- 每隔10行绘制一条灰色水平线
+                    IF y_pos MOD 20 = 0 THEN
                         color := COLOR_GRAY;
                     END IF;
 
-                    -- Resolution chart (center crosshair with resolution marks)
-                    -- 分辨率图表 (中心十字线和分辨率标记)
+                -- 分辨率测试图案 - 调整为320x240分辨率
                 WHEN "101" =>
-                    IF x_pos = WIDTH/2 OR y_pos = HEIGHT/2 THEN -- 在屏幕中心绘制白色十字线
+                    -- 简单的十字线图案
+                    IF x_pos = WIDTH/2 OR y_pos = HEIGHT/2 THEN
                         color := COLOR_WHITE;
-                    ELSIF (x_pos + y_pos) MOD 2 = 0 AND -- 在中心十字线附近绘制棋盘格状的红色标记点
-                        (x_pos > WIDTH/2 - 10 AND x_pos < WIDTH/2 + 10 AND
-                        y_pos > HEIGHT/2 - 10 AND y_pos < HEIGHT/2 + 10) THEN
+                    -- 中心区域的棋盘格
+                    ELSIF (x_pos + y_pos) MOD 2 = 0 AND 
+                          (x_pos > WIDTH/2 - 40 AND x_pos < WIDTH/2 + 40 AND
+                           y_pos > HEIGHT/2 - 40 AND y_pos < HEIGHT/2 + 40) THEN
                         color := COLOR_RED;
                     ELSE
-                        color := COLOR_BLACK; -- 其他区域为黑色
-                    END IF;
-                    
-                    -- 绘制一个简单的边框图案
-                WHEN "110" =>
-                    IF x_pos = 0 OR x_pos = WIDTH - 1 OR y_pos = 0 OR y_pos = HEIGHT - 1 THEN -- 最外层边框为白色
-                        color := COLOR_WHITE;
-                    ELSIF x_pos = 1 OR x_pos = WIDTH - 2 OR y_pos = 1 OR y_pos = HEIGHT - 2 THEN -- 次外层边框为红色
-                        color := COLOR_RED;
-                    ELSE
-                        color := COLOR_BLACK; -- 内部为黑色
+                        color := COLOR_BLACK;
                     END IF;
 
-                    -- 黑色背景带白色边框 (用于对齐测试)
-                WHEN OTHERS => -- 其他未定义的pattern_select值，默认显示此图案
-                    IF x_pos = 0 OR x_pos = WIDTH - 1 OR y_pos = 0 OR y_pos = HEIGHT - 1 THEN -- 最外层边框为白色
+                -- 边框图案 - 调整为320x240分辨率
+                WHEN "110" =>
+                    IF x_pos = 0 OR x_pos = WIDTH - 1 OR y_pos = 0 OR y_pos = HEIGHT - 1 THEN
+                        color := COLOR_WHITE;  -- 外边框白色
+                    ELSIF x_pos = 1 OR x_pos = WIDTH - 2 OR y_pos = 1 OR y_pos = HEIGHT - 2 THEN
+                        color := COLOR_RED;    -- 内边框红色
+                    ELSE
+                        color := COLOR_BLACK;  -- 内部黑色
+                    END IF;
+
+                -- 默认图案 - 简单边框与黑色背景
+                WHEN OTHERS =>
+                    IF x_pos = 0 OR x_pos = WIDTH - 1 OR y_pos = 0 OR y_pos = HEIGHT - 1 THEN
                         color := COLOR_WHITE;
-                    ELSIF x_pos = 1 OR x_pos = WIDTH - 2 OR y_pos = 1 OR y_pos = HEIGHT - 2 THEN -- 次外层边框为红色
+                    ELSIF x_pos = 1 OR x_pos = WIDTH - 2 OR y_pos = 1 OR y_pos = HEIGHT - 2 THEN
                         color := COLOR_RED;
                     ELSE
-                        color := COLOR_BLACK; -- 内部为黑色
+                        color := COLOR_BLACK;
                     END IF;
             END CASE;
 

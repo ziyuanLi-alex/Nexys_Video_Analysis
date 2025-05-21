@@ -137,54 +137,52 @@ ARCHITECTURE rtl OF Project1_top IS
 
   -- VGA determines the active area as well as gets the data from frame buffer
   --  Does the final setting of  r g b  output to the screen
-  component vga_driver
+  COMPONENT vga_driver
     GENERIC (
-        -- VGA Timing parameters (default 640x480 @ 60Hz)
-        H_VISIBLE_AREA : INTEGER := 640;
-        H_FRONT_PORCH  : INTEGER := 16;
-        H_SYNC_PULSE   : INTEGER := 96;
-        H_BACK_PORCH   : INTEGER := 48;
-        H_WHOLE_LINE   : INTEGER := 800;
-        V_VISIBLE_AREA : INTEGER := 480;
-        V_FRONT_PORCH  : INTEGER := 10;
-        V_SYNC_PULSE   : INTEGER := 2;
-        V_BACK_PORCH   : INTEGER := 33;
-        V_WHOLE_FRAME  : INTEGER := 525;
-        
-        -- Frame buffer dimensions (for the 80x60 test pattern)
-        FB_WIDTH       : INTEGER := 80;
-        FB_HEIGHT      : INTEGER := 60;
-        
-        -- Color format (default RGB565)
-        RED_BITS       : INTEGER := 5;
-        GREEN_BITS     : INTEGER := 6;
-        BLUE_BITS      : INTEGER := 5;
-        
-        -- Output color depth (VGA output bits per color)
-        OUTPUT_BITS    : INTEGER := 4
+      -- VGA时序参数 (默认640x480 @ 60Hz)
+      H_VISIBLE_AREA : INTEGER := 640;
+      H_FRONT_PORCH : INTEGER := 16;
+      H_SYNC_PULSE : INTEGER := 96;
+      H_BACK_PORCH : INTEGER := 48;
+      H_WHOLE_LINE : INTEGER := 800;
+      V_VISIBLE_AREA : INTEGER := 480;
+      V_FRONT_PORCH : INTEGER := 10;
+      V_SYNC_PULSE : INTEGER := 2;
+      V_BACK_PORCH : INTEGER := 33;
+      V_WHOLE_FRAME : INTEGER := 525;
+
+      -- 帧缓冲区尺寸 - 已更新为320x240
+      FB_WIDTH : INTEGER := 320;
+      FB_HEIGHT : INTEGER := 240;
+
+      -- 颜色格式 (默认RGB565)
+      RED_BITS : INTEGER := 5;
+      GREEN_BITS : INTEGER := 6;
+      BLUE_BITS : INTEGER := 5;
+
+      -- 输出颜色深度 (VGA输出每种颜色的位数)
+      OUTPUT_BITS : INTEGER := 4
     );
     PORT (
-        -- Clock and reset
-        clk            : IN  STD_LOGIC;  -- Pixel clock
-        rst            : IN  STD_LOGIC;  -- Reset signal
-        
-        -- Frame buffer interface
-        fb_addr        : OUT STD_LOGIC_VECTOR(12 DOWNTO 0);  -- For 80x60 = 4800 pixels
-        fb_data        : IN  STD_LOGIC_VECTOR(15 DOWNTO 0);  -- RGB565 pixel data
-        
-        -- VGA outputs
-        hsync          : OUT STD_LOGIC;
-        vsync          : OUT STD_LOGIC;
-        red            : OUT STD_LOGIC_VECTOR(OUTPUT_BITS-1 DOWNTO 0);
-        green          : OUT STD_LOGIC_VECTOR(OUTPUT_BITS-1 DOWNTO 0);
-        blue           : OUT STD_LOGIC_VECTOR(OUTPUT_BITS-1 DOWNTO 0);
-        
-        -- Display resolution selection (optional for future use)
-        resolution_sel : IN  STD_LOGIC_VECTOR(1 DOWNTO 0) := "00"  -- 00: 640x480, 01: 320x240, 10: 800x600
+      -- Clock and reset
+      clk : IN STD_LOGIC; -- Pixel clock
+      rst : IN STD_LOGIC; -- Reset signal
+
+      -- Frame buffer interface
+      fb_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- For 80x60 = 4800 pixels
+      fb_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565 pixel data
+
+      -- VGA outputs
+      hsync : OUT STD_LOGIC;
+      vsync : OUT STD_LOGIC;
+      red : OUT STD_LOGIC_VECTOR(OUTPUT_BITS - 1 DOWNTO 0);
+      green : OUT STD_LOGIC_VECTOR(OUTPUT_BITS - 1 DOWNTO 0);
+      blue : OUT STD_LOGIC_VECTOR(OUTPUT_BITS - 1 DOWNTO 0);
+
+      -- Display resolution selection (optional for future use)
+      resolution_sel : IN STD_LOGIC_VECTOR(1 DOWNTO 0) := "00" -- 00: 640x480, 01: 320x240, 10: 800x600
     );
   END COMPONENT;
-  
-
   -- The frame buffer is reference by OVdriver
   -- and data input is by OVCapture
   COMPONENT framebuffer
@@ -202,10 +200,10 @@ ARCHITECTURE rtl OF Project1_top IS
   COMPONENT test_pattern_generator IS
     PORT (
       data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- Input data (unused in this module)
-      wraddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0); -- Write address (unused in this module)
+      wraddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- Write address (unused in this module)
       wrclock : IN STD_LOGIC; -- Write clock
       wren : IN STD_LOGIC; -- Write enable (used to select test pattern)
-      rdaddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0); -- Read address from VGA controller
+      rdaddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- Read address from VGA controller
       rdclock : IN STD_LOGIC; -- Read clock (VGA clock)
       q : OUT STD_LOGIC_VECTOR(15 DOWNTO 0) -- Output pixel data for test pattern
     );
@@ -232,7 +230,7 @@ ARCHITECTURE rtl OF Project1_top IS
   SIGNAL cnt : unsigned(24 DOWNTO 0);
   SIGNAL blink : STD_LOGIC;
 
-  SIGNAL buffer_addr : STD_LOGIC_VECTOR(12 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL buffer_addr : STD_LOGIC_VECTOR(16 DOWNTO 0) := (OTHERS => '0');
   SIGNAL buffer_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
   SIGNAL capture_addr : STD_LOGIC_VECTOR(12 DOWNTO 0);
   SIGNAL capture_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
@@ -344,7 +342,7 @@ BEGIN
   );
 
   -- VGA驱动
-  vga : vga_driver PORT MAP (
+  vga : vga_driver PORT MAP(
     clk => clk_25M,
     rst => '0',
     fb_addr => buffer_addr,
@@ -354,7 +352,7 @@ BEGIN
     red => VGA_R,
     green => VGA_G,
     blue => VGA_B,
-    resolution_sel => (OTHERS => '0')
+    resolution_sel => "00"
   );
 
   -- 摄像头数据捕获
@@ -373,28 +371,28 @@ BEGIN
     we => capture_we
   );
 
-    fb : framebuffer PORT MAP
-    (
-      rdclock => clk_50M,
-      rdaddress => buffer_addr,
-      q => buffer_data,
-      wrclock => OV7670_PCLK,
-      wraddress => capture_addr,
-      data => capture_data,
-      wren => capture_we
-    );
-
-  -- -- Test pattern generator
-  -- test_pattern_gen : test_pattern_generator PORT MAP
+  -- fb : framebuffer PORT MAP
   -- (
-  --   data => test_pattern_select, -- Unused in this module
-  --   wraddress => (OTHERS => '0'), -- Unused in this module
-  --   wrclock => clk_50M,
-  --   wren => '1', -- Unused in this module
+  --   rdclock => clk_50M,
   --   rdaddress => buffer_addr,
-  --   rdclock => clk_25M,
-  --   q => buffer_data
+  --   q => buffer_data,
+  --   wrclock => OV7670_PCLK,
+  --   wraddress => capture_addr,
+  --   data => capture_data,
+  --   wren => capture_we
   -- );
+
+  -- Test pattern generator
+  test_pattern_gen : test_pattern_generator PORT MAP
+  (
+    data => test_pattern_select, -- Unused in this module
+    wraddress => (OTHERS => '0'), -- Unused in this module
+    wrclock => clk_50M,
+    wren => '1', -- Unused in this module
+    rdaddress => buffer_addr,
+    rdclock => clk_25M,
+    q => buffer_data
+  );
 
   -- Histogram generator
   -- histgen : histogram_generator PORT MAP
