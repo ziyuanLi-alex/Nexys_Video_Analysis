@@ -84,9 +84,9 @@ BEGIN
 				IF display_mode = '0' OR surv = '1' THEN
 					-- 原始画面显示（保留现有逻辑）
 					IF blank = '0' THEN
-						g <= buffer_data(11 DOWNTO 8);
-						r <= buffer_data(7 DOWNTO 4);
-						b <= buffer_data(3 DOWNTO 0);
+						r <= buffer_data(15 DOWNTO 12); -- 红色取高4位（从5位）
+						g <= buffer_data(9 DOWNTO 6); -- 绿色取中间4位（从6位）
+						b <= buffer_data(4 DOWNTO 1); -- 蓝色取高4位（从5位）
 					ELSE
 						r <= (OTHERS => '0');
 						g <= (OTHERS => '0');
