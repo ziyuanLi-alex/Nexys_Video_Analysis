@@ -187,13 +187,16 @@ ARCHITECTURE rtl OF Project1_top IS
   -- and data input is by OVCapture
   COMPONENT framebuffer
     PORT (
-      data : IN STD_LOGIC_VECTOR (15 DOWNTO 0);
-      wraddress : IN STD_LOGIC_VECTOR (12 DOWNTO 0);
+      -- 写入接口（80x60分辨率 = 4800像素）
+      data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+      wraddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0); -- 13位足够寻址4800像素
       wrclock : IN STD_LOGIC;
       wren : IN STD_LOGIC;
-      rdaddress : IN STD_LOGIC_VECTOR (12 DOWNTO 0);
+
+      -- 读取接口（支持320x240分辨率 = 76800像素）
+      rdaddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 17位支持76800像素
       rdclock : IN STD_LOGIC;
-      q : OUT STD_LOGIC_VECTOR (15 DOWNTO 0)--data OUT
+      q : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
     );
   END COMPONENT;
 
@@ -371,40 +374,27 @@ BEGIN
     we => capture_we
   );
 
-  -- fb : framebuffer PORT MAP
-  -- (
-  --   rdclock => clk_50M,
-  --   rdaddress => buffer_addr,
-  --   q => buffer_data,
-  --   wrclock => OV7670_PCLK,
-  --   wraddress => capture_addr,
-  --   data => capture_data,
-  --   wren => capture_we
-  -- );
-
-  -- Test pattern generator
-  test_pattern_gen : test_pattern_generator PORT MAP
+  fb : framebuffer PORT MAP
   (
-    data => test_pattern_select, -- Unused in this module
-    wraddress => (OTHERS => '0'), -- Unused in this module
-    wrclock => clk_50M,
-    wren => '1', -- Unused in this module
+    rdclock => clk_50M,
     rdaddress => buffer_addr,
-    rdclock => clk_25M,
-    q => buffer_data
+    q => buffer_data,
+    wrclock => OV7670_PCLK,
+    wraddress => capture_addr,
+    data => capture_data,
+    wren => capture_we
   );
 
-  -- Histogram generator
-  -- histgen : histogram_generator PORT MAP
+  -- -- Test pattern generator
+  -- test_pattern_gen : test_pattern_generator PORT MAP
   -- (
-  --   pclk => OV7670_PCLK,
-  --   vsync => OV7670_VSYNC,
-  --   pixel_data => capture_data,
-  --   pixel_valid => capture_we,
-  --   vga_clk => clk_25M,
-  --   vga_x => vga_x,
-  --   vga_y => vga_y,
-  --   hist_pixel => hist_pixel
+  --   data => test_pattern_select, -- Unused in this module
+  --   wraddress => (OTHERS => '0'), -- Unused in this module
+  --   wrclock => clk_50M,
+  --   wren => '1', -- Unused in this module
+  --   rdaddress => buffer_addr,
+  --   rdclock => clk_25M,
+  --   q => buffer_data
   -- );
 
   ----------------------------------------------------------------
