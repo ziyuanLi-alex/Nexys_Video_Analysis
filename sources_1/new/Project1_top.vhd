@@ -71,7 +71,7 @@ ENTITY Project1_top IS
 
     -- LEDG : OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
     -- LEDR : OUT STD_LOGIC_VECTOR(9 DOWNTO 0)
-    LED : out std_logic_vector(15 downto 0);
+    LED : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
     LEDB1 : OUT STD_LOGIC;
     LEDB2 : OUT STD_LOGIC
 
@@ -176,19 +176,6 @@ ARCHITECTURE rtl OF Project1_top IS
     );
   END COMPONENT;
 
-  -- COMPONENT histogram_generator
-  --   PORT (
-  --     pclk : IN STD_LOGIC;
-  --     vsync : IN STD_LOGIC;
-  --     pixel_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-  --     pixel_valid : IN STD_LOGIC;
-  --     vga_clk : IN STD_LOGIC;
-  --     vga_x : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
-  --     vga_y : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
-  --     hist_pixel : OUT STD_LOGIC_VECTOR(11 DOWNTO 0) -- R(4),G(4),B(4)
-  --   );
-  -- END COMPONENT;
-
   COMPONENT test_pattern_generator IS
     PORT (
       data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- Input data (unused in this module)
@@ -263,33 +250,16 @@ ARCHITECTURE rtl OF Project1_top IS
   SIGNAL vga_x : STD_LOGIC_VECTOR(9 DOWNTO 0);
   SIGNAL vga_y : STD_LOGIC_VECTOR(9 DOWNTO 0);
 
-  signal test_pattern_select : std_logic_vector(15 downto 0) := (others => '0');
+  SIGNAL test_pattern_select : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
 
 BEGIN
 
   ----------------------------------------------------------------
   --- PORTS
   ----------------------------------------------------------------
--- Button input handling (active-low buttons are converted to active-high signals)
--- 翻转btnupush输入到KEY中
--- WITH KEY(0) SELECT 
---     btnupush <= '1' WHEN '0',     -- When UP button is pressed (KEY(0)='0'), btnupush='1'
---                 '0' WHEN OTHERS;   -- Otherwise, btnupush='0'
-
--- WITH KEY(1) SELECT 
---     btnlpush <= '1' WHEN '0',     -- When LEFT button is pressed (KEY(1)='0'), btnlpush='1'
---                 '0' WHEN OTHERS;   -- Otherwise, btnlpush='0'
-
--- -- Note: key 3 used in registers (mentioned in comment)
-
--- WITH KEY(2) SELECT 
---     btnrpush <= '1' WHEN '0',     -- When RIGHT button is pressed (KEY(2)='0'), btnrpush='1'
---                 '0' WHEN OTHERS;   -- Otherwise, btnrpush='0'
-
--- WITH KEY(3) SELECT 
---     btndpush <= '1' WHEN '0',     -- When DOWN button is pressed (KEY(3)='0'), btndpush='1'
---                 '0' WHEN OTHERS;   -- Otherwise, btndpush='0'
-KEY <= btnd & btnr & btnl & btnu; -- Combine button signals into KEY vector
+  -- Button input handling (active-low buttons are converted to active-high signals)
+  -- 翻转btnupush输入到KEY中
+  KEY <= btnd & btnr & btnl & btnu; -- Combine button signals into KEY vector
 
   -- LED output handling
   -- LEDG <= KEY(3) & '0' & Key(2) & '0' & key(1) & config_finished & KEY(0) & blink;
@@ -297,20 +267,20 @@ KEY <= btnd & btnr & btnl & btnu; -- Combine button signals into KEY vector
   -- LED <= blink;
   -- LED <= (others => '0'); -- Initialize all LEDs to off
 
--- Switch input handling
--- Note: SW1 to 6 used by ovregisters (mentioned in comment)
--- WITH SW(3) SELECT 
---     rgb <= '1' WHEN '1',          -- When SW(3) is ON (SW(3)='1'), rgb='1'
---            '0' WHEN OTHERS;        -- Otherwise, rgb='0'
-      rgb <= SW(3);
+  -- Switch input handling
+  -- Note: SW1 to 6 used by ovregisters (mentioned in comment)
+  -- WITH SW(3) SELECT 
+  --     rgb <= '1' WHEN '1',          -- When SW(3) is ON (SW(3)='1'), rgb='1'
+  --            '0' WHEN OTHERS;        -- Otherwise, rgb='0'
+  rgb <= SW(3);
 
   -- WITH SW(5) SELECT sw5 <= '1' WHEN '1', '0' WHEN OTHERS;
   -- WITH SW(6) SELECT sw6 <= '1' WHEN '1', '0' WHEN OTHERS;
   -- WITH SW(7) SELECT surveillance <= '1' WHEN '1', '0' WHEN OTHERS;
   -- WITH SW(8) SELECT surveillance2 <= '1' WHEN '1', '0' WHEN OTHERS;
   -- WITH SW(8) SELECT display_mode <= '1' WHEN '1', '0' WHEN OTHERS;
-  
-  test_pattern_select(2 downto 0) <= SW(2 downto 0); -- Test pattern select
+
+  test_pattern_select(2 DOWNTO 0) <= SW(2 DOWNTO 0); -- Test pattern select
 
   OV7670_RESET <= '1'; -- Normal mode
   OV7670_PWDN <= '0'; -- Power device up
@@ -448,10 +418,8 @@ KEY <= btnd & btnr & btnl & btnu; -- Combine button signals into KEY vector
   -- LEDG <= KEY(3) & '0' & Key(2) & '0' & key(1) & config_finished & KEY(0) & blink;
   -- LEDR <= SW(9) & SW(8) & SW(7) & SW(6) & SW(5) & SW(4) & SW(3) & SW(2) & SW(1) & SW(0);
   LED(0) <= blink;
-  LED(15 downto 6) <= SW(9 downto 0);
-  LED(5 downto 1) <= KEY(3 downto 0) & config_finished;
+  LED(15 DOWNTO 6) <= SW(9 DOWNTO 0);
+  LED(5 DOWNTO 1) <= KEY(3 DOWNTO 0) & config_finished;
   LEDB1 <= rgb;
-
-
   -- KEY <= btndpush & btnrpush & btnlpush & btnupush;
 END rtl;
