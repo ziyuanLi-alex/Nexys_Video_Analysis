@@ -69,8 +69,8 @@ begin
 
       if survmode = '0' then
 	case nextRegAddr is
-	  when x"00" => sreg <= x"1280"; -- COM7   Reset -- Do it twice to make sure its wiped
-	  when x"01" => sreg <= x"1280"; -- COM7   Reset -- choose output format. 
+	  when x"00" => sreg <= x"1281"; -- COM7   Reset -- Do it twice to make sure its wiped
+	  when x"01" => sreg <= x"1281"; -- COM7   Reset -- choose output format. 
 	  when x"02" => sreg <= x"1101"; -- CLKRC  Prescaler then multiplied by 4 for 25mhz. 30fps.
 	  when x"03" => sreg <= colour_reg; -- COM7   VGA + RGB output
 	  when x"04" => sreg <= x"0C04"; -- COM3  Lots of stuff, enable scaling, all others off
@@ -79,14 +79,17 @@ begin
 	  when x"07" => sreg <= x"3a04"; -- TSLB   Set UV ordering,  do not auto-reset window
 	  --when x"08" => sreg <= x"8C00"; -- RGB444 Set RGB format -- must be low for rgb 565 to work
 	  when x"08" => sreg <= x"8C02"; -- RGB444 
+
 	  when x"09" => sreg <= x"1714"; -- HSTART HREF start (high 8 bits)
 	  when x"0a" => sreg <= x"1802"; -- HSTOP  HREF stop (high 8 bits)
 	  when x"0b" => sreg <= x"32A4"; -- HREF   Edge offset and low 3 bits of HSTART and HSTOP
 	  when x"0c" => sreg <= x"1903"; -- VSTART VSYNC start (high 8 bits)
 	  when x"0d" => sreg <= x"1A7b"; -- VSTOP  VSYNC stop (high 8 bits) 
 	  when x"0e" => sreg <= x"038a"; -- VREF   VSYNC low two bits
+
 	  when x"0f" => sreg <= x"703a"; -- SCALING_XSC -- default value. HScale. Can have test pattern.
 	  when x"10" => sreg <= x"7135"; -- SCALING_YSC -- default value. VScale. Can have test pattern.
+
 	  when x"11" => sreg <= x"7211"; -- SCALING_DCWCTR -- default value. H down sample by 8.
 	  when x"12" => sreg <= x"7301"; -- SCALING_PCLK_DIV -- default: 00. lowerbit = COM14. Prescale by 2.
 	  when x"13" => sreg <= x"a200"; -- SCALING_PCLK_DELAY  PCLK scaling = 4, must match COM14

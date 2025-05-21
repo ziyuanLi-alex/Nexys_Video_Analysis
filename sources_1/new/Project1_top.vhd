@@ -63,9 +63,17 @@ ENTITY Project1_top IS
     seg : OUT STD_LOGIC_VECTOR (6 DOWNTO 0); -- 段码(最低位为小数点)
     an : OUT STD_LOGIC_VECTOR (7 DOWNTO 0);
     SW : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
-    KEY : IN STD_LOGIC_VECTOR(3 DOWNTO 0);
-    LEDG : OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
-    LEDR : OUT STD_LOGIC_VECTOR(9 DOWNTO 0)
+    -- KEY : IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+    btnu : IN STD_LOGIC;
+    btnd : IN STD_LOGIC;
+    btnl : IN STD_LOGIC;
+    btnr : IN STD_LOGIC;
+
+    -- LEDG : OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
+    -- LEDR : OUT STD_LOGIC_VECTOR(9 DOWNTO 0)
+    LED : out std_logic_vector(15 downto 0);
+    LEDB1 : OUT STD_LOGIC;
+    LEDB2 : OUT STD_LOGIC
 
   );
 END Project1_top;
@@ -167,7 +175,6 @@ ARCHITECTURE rtl OF Project1_top IS
   --- Variables
   ----------------------------------------------------------------
   SIGNAL xclk : STD_LOGIC := '0'; -- This will now be driven by clk_wiz_0
-  -- signal CLOCK_50: std_logic; -- Removed: Replaced by clk_50M from clk_wiz_0
 
   -- Signals for clk_wiz_0 outputs
   SIGNAL clk_100M : STD_LOGIC; -- 100MHz output from clk_wiz_0 (if needed, or a buffered version)
@@ -200,10 +207,7 @@ ARCHITECTURE rtl OF Project1_top IS
   SIGNAL rgb : STD_LOGIC;
 
   --buttons
-  SIGNAL key0push : STD_LOGIC;
-  SIGNAL key1push : STD_LOGIC;
-  SIGNAL key2push : STD_LOGIC;
-  SIGNAL key3push : STD_LOGIC;
+  SIGNAL KEY : STD_LOGIC_VECTOR(3 DOWNTO 0);
 
   --debugging
   SIGNAL mSEG7 : STD_LOGIC_VECTOR (15 DOWNTO 0) := (OTHERS => '0');
@@ -233,17 +237,47 @@ BEGIN
   ----------------------------------------------------------------
   --- PORTS
   ----------------------------------------------------------------
-  WITH KEY(0) SELECT key0push <= '1' WHEN '0', '0' WHEN OTHERS;
-  WITH KEY(1) SELECT key1push <= '1' WHEN '0', '0' WHEN OTHERS;
-  -- key 3 used in registers.
-  WITH KEY(2) SELECT key2push <= '1' WHEN '0', '0' WHEN OTHERS;
-  WITH KEY(3) SELECT key3push <= '1' WHEN '0', '0' WHEN OTHERS;
-  --SW1 to 6 used by ovregisters
-  WITH SW(0) SELECT rgb <= '1' WHEN '1', '0' WHEN OTHERS;
-  WITH SW(5) SELECT sw5 <= '1' WHEN '1', '0' WHEN OTHERS;
-  WITH SW(6) SELECT sw6 <= '1' WHEN '1', '0' WHEN OTHERS;
-  WITH SW(7) SELECT surveillance <= '1' WHEN '1', '0' WHEN OTHERS;
-  WITH SW(8) SELECT surveillance2 <= '1' WHEN '1', '0' WHEN OTHERS;
+-- Button input handling (active-low buttons are converted to active-high signals)
+-- 翻转btnupush输入到KEY中
+-- WITH KEY(0) SELECT 
+--     btnupush <= '1' WHEN '0',     -- When UP button is pressed (KEY(0)='0'), btnupush='1'
+--                 '0' WHEN OTHERS;   -- Otherwise, btnupush='0'
+
+-- WITH KEY(1) SELECT 
+--     btnlpush <= '1' WHEN '0',     -- When LEFT button is pressed (KEY(1)='0'), btnlpush='1'
+--                 '0' WHEN OTHERS;   -- Otherwise, btnlpush='0'
+
+-- -- Note: key 3 used in registers (mentioned in comment)
+
+-- WITH KEY(2) SELECT 
+--     btnrpush <= '1' WHEN '0',     -- When RIGHT button is pressed (KEY(2)='0'), btnrpush='1'
+--                 '0' WHEN OTHERS;   -- Otherwise, btnrpush='0'
+
+-- WITH KEY(3) SELECT 
+--     btndpush <= '1' WHEN '0',     -- When DOWN button is pressed (KEY(3)='0'), btndpush='1'
+--                 '0' WHEN OTHERS;   -- Otherwise, btndpush='0'
+KEY <= btnd & btnr & btnl & btnu; -- Combine button signals into KEY vector
+
+  -- LED output handling
+  -- LEDG <= KEY(3) & '0' & Key(2) & '0' & key(1) & config_finished & KEY(0) & blink;
+  -- LEDR <= SW(9) & SW(8) & SW(7) & SW(6) & SW(5) & SW(4) & SW(3) & SW(2) & SW(1) & SW(0);
+  -- LED <= blink;
+  -- LED <= (others => '0'); -- Initialize all LEDs to off
+
+-- Switch input handling
+-- Note: SW1 to 6 used by ovregisters (mentioned in comment)
+-- WITH SW(3) SELECT 
+--     rgb <= '1' WHEN '1',          -- When SW(3) is ON (SW(3)='1'), rgb='1'
+--            '0' WHEN OTHERS;        -- Otherwise, rgb='0'
+      rgb <= SW(3);
+
+  -- WITH SW(5) SELECT sw5 <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(6) SELECT sw6 <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(7) SELECT surveillance <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(8) SELECT surveillance2 <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(8) SELECT display_mode <= '1' WHEN '1', '0' WHEN OTHERS;
+  
+  test_pattern_select(2 downto 0) <= SW(2 downto 0); -- Test pattern select
 
   OV7670_RESET <= '1'; -- Normal mode
   OV7670_PWDN <= '0'; -- Power device up
@@ -313,7 +347,10 @@ BEGIN
     leftmotion => leftmotion,
     rightmotion => rightmotion,
     buffer_addr => buffer_addr,
-    buffer_data => buffer_data
+    buffer_data => buffer_data,
+
+    display_mode => display_mode,
+    hist_pixel => hist_pixel
   );
 
   -- 摄像头数据捕获
@@ -356,19 +393,20 @@ BEGIN
       ELSE
         cnt <= cnt + 1;
       END IF;
-
-      -- 将最大运动值显示在七段数码管上
-      -- mSEG7 <= std_logic_vector(to_unsigned(max, mSEG7'length));
-      
-      -- 监控模式检测
-      -- survmode <= surveillance OR surveillance2;
+      mSeg7 <= test_pattern_select;
     END IF;
   END PROCESS;
 
   ----------------------------------------------------------------
   --- LEDS
   ----------------------------------------------------------------
-  LEDG <= key3push & '0' & key2push & '0' & key1push & config_finished & key0push & blink;
-  LEDR <= SW(9) & SW(8) & SW(7) & SW(6) & SW(5) & SW(4) & SW(3) & SW(2) & SW(1) & SW(0);
+  -- LEDG <= KEY(3) & '0' & Key(2) & '0' & key(1) & config_finished & KEY(0) & blink;
+  -- LEDR <= SW(9) & SW(8) & SW(7) & SW(6) & SW(5) & SW(4) & SW(3) & SW(2) & SW(1) & SW(0);
+  LED(0) <= blink;
+  LED(15 downto 6) <= SW(9 downto 0);
+  LED(5 downto 1) <= KEY(3 downto 0) & config_finished;
+  LEDB1 <= rgb;
 
+
+  -- KEY <= btndpush & btnrpush & btnlpush & btnupush;
 END rtl;
