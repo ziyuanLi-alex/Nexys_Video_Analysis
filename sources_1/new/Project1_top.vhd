@@ -212,6 +212,28 @@ ARCHITECTURE rtl OF Project1_top IS
     );
   END COMPONENT;
 
+  COMPONENT input_selector IS
+    PORT (
+      -- 控制信号
+      clk : IN STD_LOGIC; -- 时钟信号
+      select_input : IN STD_LOGIC; -- 输入选择信号 (0=摄像头, 1=测试图案)
+
+      -- 摄像头/帧缓冲区接口
+      fb_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 帧缓冲区读地址输出
+      fb_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 帧缓冲区数据输入
+
+      -- 测试图案接口
+      tp_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 测试图案读地址输出
+      tp_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案数据输入
+      tp_select : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案选择
+      tp_pattern : IN STD_LOGIC_VECTOR(2 DOWNTO 0); -- 测试图案模式选择
+
+      -- 输出接口 (连接到VGA驱动器)
+      vga_addr : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- VGA请求地址输入
+      vga_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0) -- VGA数据输出
+    );
+  END COMPONENT;
+
   ----------------------------------------------------------------
   --- Variables
   ----------------------------------------------------------------
@@ -276,20 +298,21 @@ ARCHITECTURE rtl OF Project1_top IS
 
   SIGNAL test_pattern_select : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
 
+  SIGNAL vga_request_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- VGA驱动器输出的地址请求
+  SIGNAL output_yield_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 选择后的像素数据输出到VGA
+  SIGNAL fb_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 帧缓冲区地址
+  SIGNAL fb_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 帧缓冲区数据
+  SIGNAL tp_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 测试图案地址
+  SIGNAL tp_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案数据
+  SIGNAL tp_select : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案选择
+
 BEGIN
 
   ----------------------------------------------------------------
   --- PORTS
   ----------------------------------------------------------------
   -- Button input handling (active-low buttons are converted to active-high signals)
-  -- 翻转btnupush输入到KEY中
   KEY <= btnd & btnr & btnl & btnu; -- Combine button signals into KEY vector
-
-  -- LED output handling
-  -- LEDG <= KEY(3) & '0' & Key(2) & '0' & key(1) & config_finished & KEY(0) & blink;
-  -- LEDR <= SW(9) & SW(8) & SW(7) & SW(6) & SW(5) & SW(4) & SW(3) & SW(2) & SW(1) & SW(0);
-  -- LED <= blink;
-  -- LED <= (others => '0'); -- Initialize all LEDs to off
 
   -- Switch input handling
   -- Note: SW1 to 6 used by ovregisters (mentioned in comment)
@@ -345,11 +368,24 @@ BEGIN
   );
 
   -- VGA驱动
+  -- vga : vga_driver PORT MAP(
+  --   clk => clk_25M,
+  --   rst => '0',
+  --   fb_addr => buffer_addr,
+  --   fb_data => buffer_data,
+  --   hsync => VGA_HS,
+  --   vsync => VGA_VS,
+  --   red => VGA_R,
+  --   green => VGA_G,
+  --   blue => VGA_B,
+  --   resolution_sel => "00"
+  -- );
+
   vga : vga_driver PORT MAP(
     clk => clk_25M,
     rst => '0',
-    fb_addr => buffer_addr,
-    fb_data => buffer_data,
+    fb_addr => vga_request_addr, -- 向input_selector请求数据的地址
+    fb_data => output_yield_data, -- 从input_selector接收数据
     hsync => VGA_HS,
     vsync => VGA_VS,
     red => VGA_R,
@@ -374,18 +410,28 @@ BEGIN
     we => capture_we
   );
 
+  -- fb : framebuffer PORT MAP
+  -- (
+  --   rdclock => clk_50M,
+  --   rdaddress => buffer_addr,
+  --   q => buffer_data,
+  --   wrclock => OV7670_PCLK,
+  --   wraddress => capture_addr,
+  --   data => capture_data,
+  --   wren => capture_we
+  -- );
   fb : framebuffer PORT MAP
   (
     rdclock => clk_50M,
-    rdaddress => buffer_addr,
-    q => buffer_data,
+    rdaddress => fb_addr, -- 从input_selector接收地址
+    q => fb_data, -- 输出到input_selector
     wrclock => OV7670_PCLK,
     wraddress => capture_addr,
     data => capture_data,
     wren => capture_we
   );
 
-  -- -- Test pattern generator
+  -- -- -- Test pattern generator
   -- test_pattern_gen : test_pattern_generator PORT MAP
   -- (
   --   data => test_pattern_select, -- Unused in this module
@@ -396,7 +442,44 @@ BEGIN
   --   rdclock => clk_25M,
   --   q => buffer_data
   -- );
+  -- test_pattern_gen : test_pattern_generator PORT MAP
+  -- (
+  --   data => tp_select,
+  --   wraddress => (OTHERS => '0'),
+  --   wrclock => clk_50M,
+  --   wren => '1',
+  --   rdaddress => tp_addr,
+  --   rdclock => clk_25M,
+  --   q => tp_data
+  -- );
 
+  test_pattern_gen : test_pattern_generator PORT MAP
+  (
+    data => tp_select,
+    wraddress => (OTHERS => '0'), -- 不使用
+    wrclock => clk_50M,
+    wren => '1', -- 始终启用
+    rdaddress => tp_addr, -- 从input_selector接收地址
+    rdclock => clk_25M,
+    q => tp_data -- 输出到input_selector
+  );
+
+  input_sel : input_selector PORT MAP
+  (
+    clk => clk_25M,
+    select_input => SW(9), -- 使用SW9选择输入源
+
+    fb_addr => fb_addr, -- 输出：发送到帧缓冲区的地址
+    fb_data => fb_data, -- 输入：从帧缓冲区接收的数据
+
+    tp_addr => tp_addr, -- 输出：发送到测试图案生成器的地址
+    tp_data => tp_data, -- 输入：从测试图案生成器接收的数据
+    tp_select => tp_select, -- 输出：发送到测试图案生成器的选择信号
+    tp_pattern => SW(2 DOWNTO 0), -- 输入：从开关接收的图案选择
+
+    vga_addr => vga_request_addr, -- 输入：从VGA驱动器接收的地址请求
+    vga_data => output_yield_data -- 输出：发送到VGA驱动器的数据
+  );
   ----------------------------------------------------------------
   --- Processes
   ----------------------------------------------------------------
