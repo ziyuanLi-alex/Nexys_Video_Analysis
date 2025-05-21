@@ -168,16 +168,28 @@ ARCHITECTURE rtl OF Project1_top IS
     );
   END COMPONENT;
 
-  COMPONENT histogram_generator
+  -- COMPONENT histogram_generator
+  --   PORT (
+  --     pclk : IN STD_LOGIC;
+  --     vsync : IN STD_LOGIC;
+  --     pixel_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+  --     pixel_valid : IN STD_LOGIC;
+  --     vga_clk : IN STD_LOGIC;
+  --     vga_x : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
+  --     vga_y : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
+  --     hist_pixel : OUT STD_LOGIC_VECTOR(11 DOWNTO 0) -- R(4),G(4),B(4)
+  --   );
+  -- END COMPONENT;
+
+  COMPONENT test_pattern_generator IS
     PORT (
-      pclk : IN STD_LOGIC;
-      vsync : IN STD_LOGIC;
-      pixel_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-      pixel_valid : IN STD_LOGIC;
-      vga_clk : IN STD_LOGIC;
-      vga_x : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
-      vga_y : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
-      hist_pixel : OUT STD_LOGIC_VECTOR(11 DOWNTO 0) -- R(4),G(4),B(4)
+      data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- Input data (unused in this module)
+      wraddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0); -- Write address (unused in this module)
+      wrclock : IN STD_LOGIC; -- Write clock
+      wren : IN STD_LOGIC; -- Write enable (used to select test pattern)
+      rdaddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0); -- Read address from VGA controller
+      rdclock : IN STD_LOGIC; -- Read clock (VGA clock)
+      q : OUT STD_LOGIC_VECTOR(15 DOWNTO 0) -- Output pixel data for test pattern
     );
   END COMPONENT;
 
@@ -247,6 +259,8 @@ ARCHITECTURE rtl OF Project1_top IS
   SIGNAL vga_x : STD_LOGIC_VECTOR(9 DOWNTO 0);
   SIGNAL vga_y : STD_LOGIC_VECTOR(9 DOWNTO 0);
 
+  signal test_pattern_select : std_logic_vector(15 downto 0) := (others => '0');
+
 BEGIN
 
   ----------------------------------------------------------------
@@ -263,7 +277,9 @@ BEGIN
   -- WITH SW(6) SELECT sw6 <= '1' WHEN '1', '0' WHEN OTHERS;
   -- WITH SW(7) SELECT surveillance <= '1' WHEN '1', '0' WHEN OTHERS;
   -- WITH SW(8) SELECT surveillance2 <= '1' WHEN '1', '0' WHEN OTHERS;
-  WITH SW(8) SELECT display_mode <= '1' WHEN '1', '0' WHEN OTHERS;
+  -- WITH SW(8) SELECT display_mode <= '1' WHEN '1', '0' WHEN OTHERS;
+  
+  test_pattern_select(2 downto 0) <= SW(2 downto 0); -- Test pattern select
 
   OV7670_RESET <= '1'; -- Normal mode
   OV7670_PWDN <= '0'; -- Power device up
@@ -343,29 +359,41 @@ BEGIN
     we => capture_we
   );
 
-  fb : framebuffer PORT MAP
+  -- fb : framebuffer PORT MAP
+  -- (
+  --   rdclock => clk_50M,
+  --   rdaddress => buffer_addr,
+  --   q => buffer_data,
+  --   wrclock => OV7670_PCLK,
+  --   wraddress => capture_addr,
+  --   data => capture_data,
+  --   wren => capture_we
+  -- );
+
+  -- Test pattern generator
+  test_pattern_gen : test_pattern_generator PORT MAP
   (
-    rdclock => clk_50M,
+    data => test_pattern_select, -- Unused in this module
+    wraddress => (OTHERS => '0'), -- Unused in this module
+    wrclock => clk_50M,
+    wren => '1', -- Unused in this module
     rdaddress => buffer_addr,
-    q => buffer_data,
-    wrclock => OV7670_PCLK,
-    wraddress => capture_addr,
-    data => capture_data,
-    wren => capture_we
+    rdclock => clk_25M,
+    q => buffer_data
   );
 
   -- Histogram generator
-  histgen : histogram_generator PORT MAP
-  (
-    pclk => OV7670_PCLK,
-    vsync => OV7670_VSYNC,
-    pixel_data => capture_data,
-    pixel_valid => capture_we,
-    vga_clk => clk_25M,
-    vga_x => vga_x,
-    vga_y => vga_y,
-    hist_pixel => hist_pixel
-  );
+  -- histgen : histogram_generator PORT MAP
+  -- (
+  --   pclk => OV7670_PCLK,
+  --   vsync => OV7670_VSYNC,
+  --   pixel_data => capture_data,
+  --   pixel_valid => capture_we,
+  --   vga_clk => clk_25M,
+  --   vga_x => vga_x,
+  --   vga_y => vga_y,
+  --   hist_pixel => hist_pixel
+  -- );
 
   ----------------------------------------------------------------
   --- Processes
@@ -382,7 +410,8 @@ BEGIN
       END IF;
 
       -- 将最大运动值显示在七段数码管上
-      -- mSEG7 <= std_logic_vector(to_unsigned(max, mSEG7'length));
+      -- mSEG7 <= std_logic_vector(to_unsigned(, mSEG7'length));
+      mSeg7 <= test_pattern_select;
 
       -- 监控模式检测
       -- survmode <= surveillance OR surveillance2;
@@ -394,5 +423,7 @@ BEGIN
   ----------------------------------------------------------------
   LEDG <= key3push & '0' & key2push & '0' & key1push & config_finished & key0push & blink;
   LEDR <= SW(9) & SW(8) & SW(7) & SW(6) & SW(5) & SW(4) & SW(3) & SW(2) & SW(1) & SW(0);
+
+
 
 END rtl;
