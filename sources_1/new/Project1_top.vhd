@@ -137,26 +137,54 @@ ARCHITECTURE rtl OF Project1_top IS
 
   -- VGA determines the active area as well as gets the data from frame buffer
   --  Does the final setting of  r g b  output to the screen
-  COMPONENT vga_driver
+  component vga_driver
+    GENERIC (
+        -- VGA Timing parameters (default 640x480 @ 60Hz)
+        H_VISIBLE_AREA : INTEGER := 640;
+        H_FRONT_PORCH  : INTEGER := 16;
+        H_SYNC_PULSE   : INTEGER := 96;
+        H_BACK_PORCH   : INTEGER := 48;
+        H_WHOLE_LINE   : INTEGER := 800;
+        V_VISIBLE_AREA : INTEGER := 480;
+        V_FRONT_PORCH  : INTEGER := 10;
+        V_SYNC_PULSE   : INTEGER := 2;
+        V_BACK_PORCH   : INTEGER := 33;
+        V_WHOLE_FRAME  : INTEGER := 525;
+        
+        -- Frame buffer dimensions (for the 80x60 test pattern)
+        FB_WIDTH       : INTEGER := 80;
+        FB_HEIGHT      : INTEGER := 60;
+        
+        -- Color format (default RGB565)
+        RED_BITS       : INTEGER := 5;
+        GREEN_BITS     : INTEGER := 6;
+        BLUE_BITS      : INTEGER := 5;
+        
+        -- Output color depth (VGA output bits per color)
+        OUTPUT_BITS    : INTEGER := 4
+    );
     PORT (
-      iVGA_CLK : IN STD_LOGIC;
-      r : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
-      g : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
-      b : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
-      hs : OUT STD_LOGIC;
-      vs : OUT STD_LOGIC;
-      surv : IN STD_LOGIC;
-      rgb : IN STD_LOGIC;
-      debug : IN NATURAL;
-      debug2 : IN NATURAL;
-      newframe : OUT STD_LOGIC;
-      leftmotion : OUT NATURAL;
-      rightmotion : OUT NATURAL;
-      buffer_addr : OUT STD_LOGIC_VECTOR(12 DOWNTO 0);
-      buffer_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0)
+        -- Clock and reset
+        clk            : IN  STD_LOGIC;  -- Pixel clock
+        rst            : IN  STD_LOGIC;  -- Reset signal
+        
+        -- Frame buffer interface
+        fb_addr        : OUT STD_LOGIC_VECTOR(12 DOWNTO 0);  -- For 80x60 = 4800 pixels
+        fb_data        : IN  STD_LOGIC_VECTOR(15 DOWNTO 0);  -- RGB565 pixel data
+        
+        -- VGA outputs
+        hsync          : OUT STD_LOGIC;
+        vsync          : OUT STD_LOGIC;
+        red            : OUT STD_LOGIC_VECTOR(OUTPUT_BITS-1 DOWNTO 0);
+        green          : OUT STD_LOGIC_VECTOR(OUTPUT_BITS-1 DOWNTO 0);
+        blue           : OUT STD_LOGIC_VECTOR(OUTPUT_BITS-1 DOWNTO 0);
+        
+        -- Display resolution selection (optional for future use)
+        resolution_sel : IN  STD_LOGIC_VECTOR(1 DOWNTO 0) := "00"  -- 00: 640x480, 01: 320x240, 10: 800x600
     );
   END COMPONENT;
   
+
   -- The frame buffer is reference by OVdriver
   -- and data input is by OVCapture
   COMPONENT framebuffer
@@ -331,26 +359,17 @@ KEY <= btnd & btnr & btnl & btnu; -- Combine button signals into KEY vector
   );
   
   -- VGA驱动
-  vgadr : vga_driver PORT MAP
-  (
-    iVGA_CLK => clk_25M,
-    r => VGA_R,
-    g => VGA_G,
-    b => VGA_B,
-    hs => VGA_HS,
-    vs => VGA_VS,
-    surv => surveillance,
-    rgb => rgb,
-    debug => debug,
-    debug2 => debug2,
-    newframe => newframe,
-    leftmotion => leftmotion,
-    rightmotion => rightmotion,
-    buffer_addr => buffer_addr,
-    buffer_data => buffer_data,
-
-    display_mode => display_mode,
-    hist_pixel => hist_pixel
+  vga : vga_driver PORT MAP (
+    clk => clk_25M,
+    rst => '0',
+    fb_addr => buffer_addr,
+    fb_data => buffer_data,
+    hsync => VGA_HS,
+    vsync => VGA_VS,
+    red => VGA_R,
+    green => VGA_G,
+    blue => VGA_B,
+    resolution_sel => (OTHERS => '0')
   );
 
   -- 摄像头数据捕获
@@ -369,17 +388,41 @@ KEY <= btnd & btnr & btnl & btnu; -- Combine button signals into KEY vector
     we => capture_we
   );
 
-  fb : framebuffer PORT MAP
-  (
-    rdclock => clk_50M,
-    rdaddress => buffer_addr,
-    q => buffer_data,
-  
-    wrclock => OV7670_PCLK,
-    wraddress => capture_addr,
-    data => capture_data,
-    wren => capture_we
-  );
+    fb : framebuffer PORT MAP
+    (
+      rdclock => clk_50M,
+      rdaddress => buffer_addr,
+      q => buffer_data,
+      wrclock => OV7670_PCLK,
+      wraddress => capture_addr,
+      data => capture_data,
+      wren => capture_we
+    );
+
+  -- -- Test pattern generator
+  -- test_pattern_gen : test_pattern_generator PORT MAP
+  -- (
+  --   data => test_pattern_select, -- Unused in this module
+  --   wraddress => (OTHERS => '0'), -- Unused in this module
+  --   wrclock => clk_50M,
+  --   wren => '1', -- Unused in this module
+  --   rdaddress => buffer_addr,
+  --   rdclock => clk_25M,
+  --   q => buffer_data
+  -- );
+
+  -- Histogram generator
+  -- histgen : histogram_generator PORT MAP
+  -- (
+  --   pclk => OV7670_PCLK,
+  --   vsync => OV7670_VSYNC,
+  --   pixel_data => capture_data,
+  --   pixel_valid => capture_we,
+  --   vga_clk => clk_25M,
+  --   vga_x => vga_x,
+  --   vga_y => vga_y,
+  --   hist_pixel => hist_pixel
+  -- );
 
   ----------------------------------------------------------------
   --- Processes
