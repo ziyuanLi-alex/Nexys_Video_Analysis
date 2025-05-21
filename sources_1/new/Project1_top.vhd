@@ -255,15 +255,15 @@ ARCHITECTURE rtl OF Project1_top IS
   SIGNAL cnt : unsigned(24 DOWNTO 0);
   SIGNAL blink : STD_LOGIC;
 
-  SIGNAL buffer_addr : STD_LOGIC_VECTOR(16 DOWNTO 0) := (OTHERS => '0');
-  SIGNAL buffer_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+  -- SIGNAL buffer_addr : STD_LOGIC_VECTOR(16 DOWNTO 0) := (OTHERS => '0');
+  -- SIGNAL buffer_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
   SIGNAL capture_addr : STD_LOGIC_VECTOR(12 DOWNTO 0);
   SIGNAL capture_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
   SIGNAL capture_we : STD_LOGIC; -- write enable.
   SIGNAL config_finished : STD_LOGIC;
   --modes
-  SIGNAL surveillance : STD_LOGIC;
-  SIGNAL surveillance2 : STD_LOGIC;
+  -- SIGNAL surveillance : STD_LOGIC;
+  -- SIGNAL surveillance2 : STD_LOGIC;
   SIGNAL sw5 : STD_LOGIC;
   SIGNAL sw6 : STD_LOGIC;
   SIGNAL survmode : STD_LOGIC;
@@ -274,27 +274,27 @@ ARCHITECTURE rtl OF Project1_top IS
 
   --debugging
   SIGNAL mSEG7 : STD_LOGIC_VECTOR (15 DOWNTO 0) := (OTHERS => '0');
-  SIGNAL debug : NATURAL := 0;
-  SIGNAL debug2 : NATURAL := 0;
+  -- SIGNAL debug : NATURAL := 0;
+  -- SIGNAL debug2 : NATURAL := 0;
   SIGNAL max : NATURAL := 0;
-  SIGNAL leftmotion : NATURAL := 0;
-  SIGNAL rightmotion : NATURAL := 0;
-  SIGNAL newframe : STD_LOGIC;
-  SIGNAL summax : NATURAL := 0;
+  -- SIGNAL leftmotion : NATURAL := 0;
+  -- SIGNAL rightmotion : NATURAL := 0;
+  -- SIGNAL newframe : STD_LOGIC;
+  -- SIGNAL summax : NATURAL := 0;
   --signal motionaddr : std_logic_vector(3 downto 0) := (others => '0');
   --signal sums : unsigned(15 downto 0) := (others => '0');
 
   --audio
-  CONSTANT BUZZER_THRESHOLD : NATURAL := 7500; -- magic number from heuristicsis max should be 320*480 however..
-  SIGNAL left : STD_LOGIC;
-  SIGNAL AUD_CTRL_CLK : STD_LOGIC;
-  SIGNAL buzzer : STD_LOGIC := '0';
-  SIGNAL buzzercnt : unsigned(31 DOWNTO 0);
+  -- CONSTANT BUZZER_THRESHOLD : NATURAL := 7500; -- magic number from heuristicsis max should be 320*480 however..
+  -- SIGNAL left : STD_LOGIC;
+  -- SIGNAL AUD_CTRL_CLK : STD_LOGIC;
+  -- SIGNAL buzzer : STD_LOGIC := '0';
+  -- SIGNAL buzzercnt : unsigned(31 DOWNTO 0);
 
   SIGNAL display_mode : STD_LOGIC := '0';
-  SIGNAL hist_pixel : STD_LOGIC_VECTOR(11 DOWNTO 0);
-  SIGNAL vga_x : STD_LOGIC_VECTOR(9 DOWNTO 0);
-  SIGNAL vga_y : STD_LOGIC_VECTOR(9 DOWNTO 0);
+  -- SIGNAL hist_pixel : STD_LOGIC_VECTOR(11 DOWNTO 0);
+  -- SIGNAL vga_x : STD_LOGIC_VECTOR(9 DOWNTO 0);
+  -- SIGNAL vga_y : STD_LOGIC_VECTOR(9 DOWNTO 0);
 
   SIGNAL test_pattern_select : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
 
