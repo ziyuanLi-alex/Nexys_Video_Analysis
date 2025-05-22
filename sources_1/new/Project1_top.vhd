@@ -328,17 +328,17 @@ ARCHITECTURE rtl OF Project1_top IS
   ---------------------------
   -- Camera and Frame Buffer Signals
   ---------------------------
-  -- Frame capture signals
-  SIGNAL capture_addr : STD_LOGIC_VECTOR(12 DOWNTO 0); -- Address for storing captured frame
-  SIGNAL capture_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Pixel data from camera
-  SIGNAL capture_we : STD_LOGIC; -- Write enable for frame buffer
-  SIGNAL config_finished : STD_LOGIC; -- Camera configuration status  
+  -- 帧捕获信号
+  SIGNAL capture_addr : STD_LOGIC_VECTOR(12 DOWNTO 0);  -- 存储捕获帧的地址
+  SIGNAL capture_data : STD_LOGIC_VECTOR(15 DOWNTO 0);  -- 来自摄像头的像素数据
+  SIGNAL capture_we : STD_LOGIC;                        -- 帧缓冲区写使能
+  SIGNAL config_finished : STD_LOGIC;                   -- 摄像头配置状态标志  
 
-  -- Mode control signals
-  SIGNAL sw5 : STD_LOGIC; -- Speed adjustment for motion detector
-  SIGNAL sw6 : STD_LOGIC; -- Freeze capture
-  SIGNAL survmode : STD_LOGIC; -- Surveillance mode
-  SIGNAL rgb : STD_LOGIC; -- RGB/YCbCr color mode selector  
+  -- 模式控制信号
+  SIGNAL sw5 : STD_LOGIC := '0';              -- 运动检测器速度调整
+  SIGNAL sw6 : STD_LOGIC := '0';              -- 冻结捕获
+  SIGNAL survmode : STD_LOGIC := '0';         -- 监控模式（已废弃，保留兼容性）
+  SIGNAL rgb : STD_LOGIC;                     -- RGB/YCbCr 色彩模式选择器  
 
   ---------------------------
   -- Input Control Signals
@@ -366,31 +366,14 @@ ARCHITECTURE rtl OF Project1_top IS
   -- Video Pipeline Signals
   ---------------------------
   -- Video data path signals
-  SIGNAL vga_request_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- Address request from VGA controller
-  SIGNAL output_yield_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Final pixel data to VGA
-  SIGNAL fb_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- Frame buffer read address
-  SIGNAL fb_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Frame buffer data output
-  SIGNAL tp_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- Test pattern read address
-  SIGNAL tp_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Test pattern data output
-  SIGNAL tp_select : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Test pattern selection control
-
-  ---------------------------
-  -- Histogram Analysis Signals (新增部分)
-  ---------------------------
-  SIGNAL hist_enable : STD_LOGIC; -- 直方图显示使能
-  SIGNAL hist_mode : STD_LOGIC_VECTOR(1 DOWNTO 0); -- 直方图模式选择
-  SIGNAL hist_addr : STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图读取地址
-  SIGNAL hist_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据
-  SIGNAL hist_pixel : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图显示像素
-  SIGNAL frame_start : STD_LOGIC; -- 帧开始信号
-
-  -- VGA坐标和控制信号 (用于histogram_display)
-  SIGNAL vga_x_coord : STD_LOGIC_VECTOR(9 DOWNTO 0);
-  SIGNAL vga_y_coord : STD_LOGIC_VECTOR(9 DOWNTO 0);
-  SIGNAL vga_display_active : STD_LOGIC;
-
-  -- 最终输出像素选择
-  SIGNAL final_pixel_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
+  SIGNAL vga_request_addr : STD_LOGIC_VECTOR(16 DOWNTO 0);  -- VGA控制器请求的地址
+  SIGNAL output_yield_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 发送到VGA的最终像素数据
+  SIGNAL fb_addr : STD_LOGIC_VECTOR(16 DOWNTO 0);           -- 帧缓冲区读地址
+  SIGNAL fb_data : STD_LOGIC_VECTOR(15 DOWNTO 0);           -- 帧缓冲区数据输出
+  SIGNAL tp_addr : STD_LOGIC_VECTOR(16 DOWNTO 0);           -- 测试图案读地址
+  SIGNAL tp_data : STD_LOGIC_VECTOR(15 DOWNTO 0);           -- 测试图案数据输出
+  SIGNAL tp_select : STD_LOGIC_VECTOR(15 DOWNTO 0);         -- 测试图案选择控制
+  
 
 BEGIN
 
@@ -410,16 +393,16 @@ BEGIN
   OV7670_PWDN <= '0'; -- Power device up
   OV7670_XCLK <= clk_25M; -- 使用从clk_wiz_0生成的25MHz时钟
 
-  hist_enable <= SW(7); -- SW7: 直方图显示开关
-  hist_mode <= SW(6 DOWNTO 5); -- SW6-SW5: 直方图类型 (00:Y, 01:R, 10:G, 11:B)
-  frame_start <= OV7670_VSYNC; -- 帧开始信号
+  -- hist_enable <= SW(7); -- SW7: 直方图显示开关
+  -- hist_mode <= SW(6 DOWNTO 5); -- SW6-SW5: 直方图类型 (00:Y, 01:R, 10:G, 11:B)
+  -- frame_start <= OV7670_VSYNC; -- 帧开始信号
   
   -- 从VGA地址计算屏幕坐标 (简化版本，适用于320x240缩放到640x480)
-  vga_x_coord <= STD_LOGIC_VECTOR(TO_UNSIGNED((TO_INTEGER(UNSIGNED(vga_request_addr)) MOD 320) * 2, 10));
-  vga_y_coord <= STD_LOGIC_VECTOR(TO_UNSIGNED((TO_INTEGER(UNSIGNED(vga_request_addr)) / 320) * 2, 10));
-  vga_display_active <= '1' WHEN TO_INTEGER(UNSIGNED(vga_request_addr)) < 76800 ELSE '0';
+  -- vga_x_coord <= STD_LOGIC_VECTOR(TO_UNSIGNED((TO_INTEGER(UNSIGNED(vga_request_addr)) MOD 320) * 2, 10));
+  -- vga_y_coord <= STD_LOGIC_VECTOR(TO_UNSIGNED((TO_INTEGER(UNSIGNED(vga_request_addr)) / 320) * 2, 10));
+  -- vga_display_active <= '1' WHEN TO_INTEGER(UNSIGNED(vga_request_addr)) < 76800 ELSE '0';
 
-  final_pixel_data <= hist_pixel WHEN (hist_enable = '1' AND hist_pixel /= x"0000") ELSE output_yield_data;
+  -- final_pixel_data <= hist_pixel WHEN (hist_enable = '1' AND hist_pixel /= x"0000") ELSE output_yield_data;
 
 
   -- 时钟生成器
