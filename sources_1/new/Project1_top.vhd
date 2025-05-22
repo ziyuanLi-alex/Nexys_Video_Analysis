@@ -324,6 +324,29 @@ ARCHITECTURE rtl OF Project1_top IS
   SIGNAL tp_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
   SIGNAL tp_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
   SIGNAL tp_select : STD_LOGIC_VECTOR(15 DOWNTO 0);
+
+  -- Framebuffer验证信号
+  SIGNAL debug_capture_active : STD_LOGIC := '0';
+  SIGNAL debug_frame_count : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_pixel_count : STD_LOGIC_VECTOR(16 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_last_addr : STD_LOGIC_VECTOR(16 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_last_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_total_pixels : STD_LOGIC_VECTOR(16 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_href_count : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_pclk_count : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_vsync_count : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_data_nonzero_count : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_vsync_low_count : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL debug_valid_condition : STD_LOGIC := '0';
+
+  -- 状态监控信号
+  SIGNAL vsync_edge_detect : STD_LOGIC := '0';
+  SIGNAL vsync_prev : STD_LOGIC := '0';
+  SIGNAL href_active_count : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+
+  -- 数据验证信号
+  SIGNAL data_changed : STD_LOGIC := '0';
+  SIGNAL prev_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
 BEGIN
 
   ----------------------------------------------------------------
@@ -553,6 +576,81 @@ BEGIN
   --- Processes
   ----------------------------------------------------------------
   ----------------------------------------------------------------
+  -- PROCESS (clk_50M)
+  -- BEGIN
+  --   IF rising_edge(clk_50M) THEN
+  --     IF cnt >= CNT_MAX THEN
+  --       cnt <= (OTHERS => '0');
+  --       blink <= NOT blink;
+  --     ELSE
+  --       cnt <= cnt + 1;
+  --     END IF;
+  --     mSeg7 <= test_pattern_select;
+  --   END IF;
+  -- END PROCESS;
+
+  debug_capture_process : PROCESS (OV7670_PCLK)
+  BEGIN
+    IF rising_edge(OV7670_PCLK) THEN
+      -- 计算PCLK周期
+      debug_pclk_count <= debug_pclk_count + 1;
+
+      -- 统计VSYNC为低的时间
+      IF OV7670_VSYNC = '0' THEN
+        debug_vsync_low_count <= debug_vsync_low_count + 1;
+      END IF;
+
+      -- 检查有效捕获条件
+      debug_valid_condition <= (NOT OV7670_VSYNC) AND OV7670_HREF;
+
+      -- 监控capture活动
+      debug_capture_active <= capture_we;
+
+      IF debug_valid_condition = '1' THEN
+        debug_pixel_count <= debug_pixel_count + 1;
+      END IF;
+
+      -- 记录最后写入的地址和数据
+      IF capture_we = '1' THEN
+        debug_last_addr <= capture_addr;
+        debug_last_data <= capture_data;
+        debug_pixel_count <= debug_pixel_count + 1;
+        debug_total_pixels <= debug_total_pixels + 1;
+
+        -- 统计非零数据
+        IF capture_data /= x"0000" THEN
+          debug_data_nonzero_count <= debug_data_nonzero_count + 1;
+        END IF;
+
+        -- 检测数据变化
+        IF capture_data /= prev_data THEN
+          data_changed <= '1';
+        ELSE
+          data_changed <= '0';
+        END IF;
+        prev_data <= capture_data;
+      END IF;
+
+      -- HREF计数
+      IF OV7670_HREF = '1' THEN
+        debug_href_count <= debug_href_count + 1;
+      END IF;
+
+      -- VSYNC边沿检测和帧计数
+      vsync_prev <= OV7670_VSYNC;
+      vsync_edge_detect <= OV7670_VSYNC AND NOT vsync_prev;
+
+      IF vsync_edge_detect = '1' THEN
+        debug_frame_count <= debug_frame_count + 1;
+        debug_pixel_count <= (OTHERS => '0');
+        -- 重置计数器以便观察每帧的情况
+        debug_href_count <= (OTHERS => '0');
+        debug_pclk_count <= (OTHERS => '0');
+        debug_vsync_low_count <= (OTHERS => '0'); -- 重置
+      END IF;
+    END IF;
+  END PROCESS;
+  -- 修改现有的时钟进程，添加调试信息到七段数码管
   PROCESS (clk_50M)
   BEGIN
     IF rising_edge(clk_50M) THEN
@@ -562,18 +660,45 @@ BEGIN
       ELSE
         cnt <= cnt + 1;
       END IF;
-      mSeg7 <= test_pattern_select;
+
+      -- 根据开关选择显示不同的调试信息
+      CASE SW(8 DOWNTO 6) IS
+        WHEN "000" => mSeg7 <= test_pattern_select;
+        WHEN "001" => mSeg7 <= debug_frame_count; -- 正常增长到500+
+        WHEN "010" => mSeg7 <= debug_vsync_low_count; -- 变化过快显示为8888
+        WHEN "011" => mSeg7 <= debug_last_data; -- 显示0000
+        WHEN "100" => mSeg7 <= debug_pixel_count(15 DOWNTO 0); -- 快速变化的大数字
+        WHEN "101" => mSeg7 <= debug_href_count; -- 快速变化的大数字
+        WHEN "110" => mSeg7 <= debug_pclk_count; -- 和debug_vsync_low_count基本一致
+        WHEN "111" => mSeg7 <= x"00" & "0000000" & debug_valid_condition; -- 0000
+        WHEN OTHERS => mSeg7 <= (OTHERS => '0');
+      END CASE;
     END IF;
   END PROCESS;
 
   ----------------------------------------------------------------
   --- LEDS
   ----------------------------------------------------------------
-  -- LEDG <= KEY(3) & '0' & Key(2) & '0' & key(1) & config_finished & KEY(0) & blink;
-  -- LEDR <= SW(9) & SW(8) & SW(7) & SW(6) & SW(5) & SW(4) & SW(3) & SW(2) & SW(1) & SW(0);
-  LED(0) <= blink;
-  LED(15 DOWNTO 6) <= SW(9 DOWNTO 0);
-  LED(5 DOWNTO 1) <= KEY(3 DOWNTO 0) & config_finished;
-  LEDB1 <= rgb;
-  -- KEY <= btndpush & btnrpush & btnlpush & btnupush;
+  -- LED(0) <= blink;
+  -- -- LED(15 DOWNTO 6) <= SW(9 DOWNTO 0);
+  -- -- LED(5 DOWNTO 1) <= KEY(3 DOWNTO 0) & config_finished;
+  -- LED(4) <= OV7670_VSYNC; -- 帧同步状态
+  -- LED(5) <= OV7670_HREF; -- 行同步状态
+
+  -- LEDB1 <= rgb;
+  -- -- KEY <= btndpush & btnrpush & btnlpush & btnupush;
+
+  LED(0) <= blink; -- 系统心跳
+  LED(1) <= config_finished; -- 相机配置完成
+  LED(2) <= debug_capture_active; -- 实时捕获活动（应该闪烁）
+  LED(3) <= OV7670_HREF; -- HREF状态（应该快速闪烁）
+  LED(4) <= OV7670_VSYNC; -- VSYNC状态（应该慢速闪烁）
+  LED(5) <= '1' WHEN debug_pixel_count > 0 ELSE
+  '0'; -- 像素计数指示
+  LED(6) <= '1' WHEN debug_href_count > 0 ELSE
+  '0'; -- HREF计数指示
+  LED(7) <= '1' WHEN debug_pclk_count > 0 ELSE
+  '0'; -- PCLK计数指示
+  LED(8) <= debug_valid_condition; -- 有效捕获条件指示
+  LED(9) <= NOT OV7670_VSYNC; -- VSYNC反相
 END rtl;
