@@ -259,47 +259,47 @@ ARCHITECTURE rtl OF Project1_top IS
   -- Image Analysis Components
   ---------------------------
   -- 直方图生成器
-  COMPONENT histogram_generator IS
-    PORT (
-      clk : IN STD_LOGIC; -- 时钟信号
-      reset : IN STD_LOGIC; -- 复位信号
+  -- COMPONENT histogram_generator IS
+  --   PORT (
+  --     clk : IN STD_LOGIC; -- 时钟信号
+  --     reset : IN STD_LOGIC; -- 复位信号
 
-      -- 视频输入接口
-      pixel_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 输入像素数据 (RGB565格式)
-      pixel_valid : IN STD_LOGIC; -- 像素有效信号
-      frame_start : IN STD_LOGIC; -- 帧开始信号
+  --     -- 视频输入接口
+  --     pixel_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 输入像素数据 (RGB565格式)
+  --     pixel_valid : IN STD_LOGIC; -- 像素有效信号
+  --     frame_start : IN STD_LOGIC; -- 帧开始信号
 
-      -- 直方图存储接口
-      hist_addr : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图读取地址 (0-255)
-      hist_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据输出
+  --     -- 直方图存储接口
+  --     hist_addr : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图读取地址 (0-255)
+  --     hist_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据输出
 
-      -- 控制接口
-      mode : IN STD_LOGIC_VECTOR(1 DOWNTO 0) -- 00: Y亮度直方图, 01: R直方图, 10: G直方图, 11: B直方图
-    );
-  END COMPONENT;
+  --     -- 控制接口
+  --     mode : IN STD_LOGIC_VECTOR(1 DOWNTO 0) -- 00: Y亮度直方图, 01: R直方图, 10: G直方图, 11: B直方图
+  --   );
+  -- END COMPONENT;
 
-  -- 直方图显示
-  COMPONENT histogram_display IS
-    PORT (
-      clk : IN STD_LOGIC; -- 时钟信号
-      reset : IN STD_LOGIC; -- 复位信号
+  -- -- 直方图显示
+  -- COMPONENT histogram_display IS
+  --   PORT (
+  --     clk : IN STD_LOGIC; -- 时钟信号
+  --     reset : IN STD_LOGIC; -- 复位信号
 
-      -- VGA位置输入
-      x_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- X坐标 (0-639)
-      y_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- Y坐标 (0-479)
-      active : IN STD_LOGIC; -- 显示区域有效信号
+  --     -- VGA位置输入
+  --     x_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- X坐标 (0-639)
+  --     y_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- Y坐标 (0-479)
+  --     active : IN STD_LOGIC; -- 显示区域有效信号
 
-      -- 直方图数据输入
-      hist_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据
+  --     -- 直方图数据输入
+  --     hist_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据
 
-      -- 直方图类型控制
-      hist_type : IN STD_LOGIC_VECTOR(1 DOWNTO 0); -- 00: Y, 01: R, 10: G, 11: B
+  --     -- 直方图类型控制
+  --     hist_type : IN STD_LOGIC_VECTOR(1 DOWNTO 0); -- 00: Y, 01: R, 10: G, 11: B
 
-      -- 像素输出
-      pixel_out : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565格式输出像素
-      hist_addr : OUT STD_LOGIC_VECTOR(7 DOWNTO 0) -- 直方图读取地址
-    );
-  END COMPONENT;
+  --     -- 像素输出
+  --     pixel_out : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565格式输出像素
+  --     hist_addr : OUT STD_LOGIC_VECTOR(7 DOWNTO 0) -- 直方图读取地址
+  --   );
+  -- END COMPONENT;
 
   ----------------------------------------------------------------
   --- SIGNALS
@@ -470,24 +470,11 @@ BEGIN
   --   resolution_sel => "00"
   -- );
 
-  -- vga : vga_driver PORT MAP(
-  --   clk => clk_25M,
-  --   rst => '0',
-  --   fb_addr => vga_request_addr, -- 向input_selector请求数据的地址
-  --   fb_data => output_yield_data, -- 从input_selector接收数据
-  --   hsync => VGA_HS,
-  --   vsync => VGA_VS,
-  --   red => VGA_R,
-  --   green => VGA_G,
-  --   blue => VGA_B,
-  --   resolution_sel => "00"
-  -- );
-
-    vga : vga_driver PORT MAP(
+  vga : vga_driver PORT MAP(
     clk => clk_25M,
     rst => '0',
-    fb_addr => vga_request_addr,
-    fb_data => final_pixel_data, -- 使用最终合成的像素数据
+    fb_addr => vga_request_addr, -- 向input_selector请求数据的地址
+    fb_data => output_yield_data, -- 从input_selector接收数据
     hsync => VGA_HS,
     vsync => VGA_VS,
     red => VGA_R,
@@ -495,6 +482,19 @@ BEGIN
     blue => VGA_B,
     resolution_sel => "00"
   );
+
+  --   vga : vga_driver PORT MAP(
+  --   clk => clk_25M,
+  --   rst => '0',
+  --   fb_addr => vga_request_addr,
+  --   fb_data => final_pixel_data, -- 使用最终合成的像素数据
+  --   hsync => VGA_HS,
+  --   vsync => VGA_VS,
+  --   red => VGA_R,
+  --   green => VGA_G,
+  --   blue => VGA_B,
+  --   resolution_sel => "00"
+  -- );
 
   -- 摄像头数据捕获
   ovcap : OV7670_capture PORT MAP
@@ -584,44 +584,44 @@ BEGIN
   );
 
 
-    -- 直方图生成器实例化
-  hist_gen : histogram_generator PORT MAP(
-    clk => OV7670_PCLK,
-    reset => '0',
+  --   -- 直方图生成器实例化
+  -- hist_gen : histogram_generator PORT MAP(
+  --   clk => OV7670_PCLK,
+  --   reset => '0',
     
-    -- 视频输入接口 - 直接使用capture数据
-    pixel_data => capture_data,
-    pixel_valid => capture_we,
-    frame_start => frame_start,
+  --   -- 视频输入接口 - 直接使用capture数据
+  --   pixel_data => capture_data,
+  --   pixel_valid => capture_we,
+  --   frame_start => frame_start,
     
-    -- 直方图存储接口
-    hist_addr => hist_addr,
-    hist_data => hist_data,
+  --   -- 直方图存储接口
+  --   hist_addr => hist_addr,
+  --   hist_data => hist_data,
     
-    -- 控制接口
-    mode => hist_mode
-  );
+  --   -- 控制接口
+  --   mode => hist_mode
+  -- );
 
-  -- 直方图显示组件实例化
-  hist_disp : histogram_display PORT MAP(
-    clk => clk_25M,
-    reset => '0',
+  -- -- 直方图显示组件实例化
+  -- hist_disp : histogram_display PORT MAP(
+  --   clk => clk_25M,
+  --   reset => '0',
     
-    -- VGA位置输入
-    x_pos => vga_x_coord,
-    y_pos => vga_y_coord,
-    active => vga_display_active,
+  --   -- VGA位置输入
+  --   x_pos => vga_x_coord,
+  --   y_pos => vga_y_coord,
+  --   active => vga_display_active,
     
-    -- 直方图数据输入
-    hist_data => hist_data,
+  --   -- 直方图数据输入
+  --   hist_data => hist_data,
     
-    -- 直方图类型控制
-    hist_type => hist_mode,
+  --   -- 直方图类型控制
+  --   hist_type => hist_mode,
     
-    -- 像素输出
-    pixel_out => hist_pixel,
-    hist_addr => hist_addr
-  );
+  --   -- 像素输出
+  --   pixel_out => hist_pixel,
+  --   hist_addr => hist_addr
+  -- );
 
   ----------------------------------------------------------------
   --- Processes

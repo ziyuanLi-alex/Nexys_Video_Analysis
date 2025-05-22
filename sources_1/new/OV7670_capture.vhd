@@ -13,148 +13,145 @@
 --    11        0         GGGBBBBBxxxxxxxx  RRRRRGGGGGGBBBBB  1 
 
 ----------------------------------------------------------------------------------
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+LIBRARY IEEE;
+USE IEEE.STD_LOGIC_1164.ALL;
+USE IEEE.NUMERIC_STD.ALL;
 
-entity OV7670_capture is
-  Port ( pclk  : in   STD_LOGIC;
-	 vsync : in   STD_LOGIC;
-	 href  : in   STD_LOGIC; 
-	 surv : in std_logic;
-	 sw5 : in std_logic;
-	 sw6 : in std_logic;
-	 dport  : in   STD_LOGIC_VECTOR (7 downto 0);
-	 addr  : out  STD_LOGIC_VECTOR (12 downto 0);
-	 dout  : out  STD_LOGIC_VECTOR (15 downto 0);
-	 we    : out  STD_LOGIC;
-	 maxx : out natural
-       );
-end OV7670_capture;
+ENTITY OV7670_capture IS
+	PORT (
+		pclk : IN STD_LOGIC;
+		vsync : IN STD_LOGIC;
+		href : IN STD_LOGIC;
+		surv : IN STD_LOGIC;
+		sw5 : IN STD_LOGIC;
+		sw6 : IN STD_LOGIC;
+		dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0);
+		addr : OUT STD_LOGIC_VECTOR (12 DOWNTO 0);
+		dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0);
+		we : OUT STD_LOGIC;
+		maxx : OUT NATURAL
+	);
+END OV7670_capture;
 
-architecture Behavioral of OV7670_capture is
-  --In comparison to current href, vync, data.
-  --latched means the signal is one cycle late
-  --hold means we the signal is two cycles late.
-  signal duty         : std_logic_vector(1 downto 0)  := (others => '0');
-  signal address      : STD_LOGIC_VECTOR(12 downto 0) := (others => '0');
-  signal we_reg       : std_logic := '0';
+ARCHITECTURE Behavioral OF OV7670_capture IS
+	--In comparison to current href, vync, data.
+	--latched means the signal is one cycle late
+	--hold means we the signal is two cycles late.
+	SIGNAL duty : STD_LOGIC_VECTOR(1 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL address : STD_LOGIC_VECTOR(12 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL we_reg : STD_LOGIC := '0';
 
-  signal latched_vsync : STD_LOGIC := '0';
-  signal latched_href  : STD_LOGIC := '0';
-  signal latched_data  : STD_LOGIC_VECTOR (7 downto 0) := (others => '0');
-  signal hold_data     : std_logic_vector(15 downto 0) := (others => '0');
-  signal hold_href     : std_logic := '0';
-  signal holdR	       : std_logic_vector(3 downto 0)  := (others => '0');
-  signal holdG	       : std_logic_vector(3 downto 0)  := (others => '0');
-  signal holdB	       : std_logic_vector(3 downto 0)  := (others => '0');
+	SIGNAL latched_vsync : STD_LOGIC := '0';
+	SIGNAL latched_href : STD_LOGIC := '0';
+	SIGNAL latched_data : STD_LOGIC_VECTOR (7 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL hold_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL hold_href : STD_LOGIC := '0';
+	SIGNAL holdR : STD_LOGIC_VECTOR(3 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL holdG : STD_LOGIC_VECTOR(3 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL holdB : STD_LOGIC_VECTOR(3 DOWNTO 0) := (OTHERS => '0');
 
-  -- signal duty         : std_logic_vector(0 downto 0)  := (others => '0'); -- 2x vert
-  -- signal href_last    : std_logic_vector(14 downto 0)  := (others => '0'); -- 1/2x 
-  signal href_last     : std_logic_vector(6 downto 0)  := (others => '0'); 
-  signal halfaddress   : std_logic := '0';
-  signal saveframe     : std_logic := '0';
-  signal cnt	       : natural := 0;
-  signal max	       : natural := 0;
-  signal framecnt      : natural := 0;
-  signal framemax      : natural := 0;
-begin
-  with sw5 select framemax <= 29 when '0', 14 when others;
+	-- signal duty         : std_logic_vector(0 downto 0)  := (others => '0'); -- 2x vert
+	-- signal href_last    : std_logic_vector(14 downto 0)  := (others => '0'); -- 1/2x 
+	SIGNAL href_last : STD_LOGIC_VECTOR(6 DOWNTO 0) := (OTHERS => '0');
+	SIGNAL halfaddress : STD_LOGIC := '0';
+	SIGNAL saveframe : STD_LOGIC := '0';
+	SIGNAL cnt : NATURAL := 0;
+	SIGNAL max : NATURAL := 0;
+	SIGNAL framecnt : NATURAL := 0;
+	SIGNAL framemax : NATURAL := 0;
+BEGIN
+	WITH sw5 SELECT framemax <= 29 WHEN '0', 14 WHEN OTHERS;
 
-  addr	<= address;
-  we	<= we_reg;
-  dout  <= hold_data; 
+	addr <= address;
+	we <= we_reg;
+	dout <= hold_data;
 
-  process(pclk)
-  begin
-    maxx <= max;
-    -- Process at rising edge
-    -- Capture at falling edge
+	PROCESS (pclk)
+	BEGIN
+		maxx <= max;
+		-- Process at rising edge
+		-- Capture at falling edge
 
-    if falling_edge(pclk) then
-      latched_data  <= dport;
-      latched_href  <= href;
-      latched_vsync <= vsync;
-    end if;
+		IF falling_edge(pclk) THEN
+			latched_data <= dport;
+			latched_href <= href;
+			latched_vsync <= vsync;
+		END IF;
 
-    if rising_edge(pclk) then
-      if we_reg = '1'  then
-	if cnt > max then
-	  max <= cnt;
-	end if;
-	if surv = '1' then
-	  -- Can't put this inside vsync? I wonder
-	  if saveframe = '0' and cnt = 0 then
-	    address  <=  std_logic_vector(to_unsigned(1, address'length));
-	    if framecnt = framemax then
-	      saveframe <= '1';
-	    end if;
-	    framecnt <= framecnt + 1;
-	  elsif saveframe = '1' and cnt = 0 then
-	    address  <= std_logic_vector(to_unsigned(2401, address'length));
-	    saveframe <= '0';
-	    framecnt <= 0;
-	  else
-	    address <= std_logic_vector(unsigned(address)+1);
-	  end if;
-	else
-	  address <= std_logic_vector(unsigned(address)+1);
-	end if;
+		IF rising_edge(pclk) THEN
+			IF we_reg = '1' THEN
+				IF cnt > max THEN
+					max <= cnt;
+				END IF;
+				-- IF surv = '1' THEN
+				-- 	-- Can't put this inside vsync? I wonder
+				-- 	IF saveframe = '0' AND cnt = 0 THEN
+				-- 		address <= STD_LOGIC_VECTOR(to_unsigned(1, address'length));
+				-- 		IF framecnt = framemax THEN
+				-- 			saveframe <= '1';
+				-- 		END IF;
+				-- 		framecnt <= framecnt + 1;
+				-- 	ELSIF saveframe = '1' AND cnt = 0 THEN
+				-- 		address <= STD_LOGIC_VECTOR(to_unsigned(2401, address'length));
+				-- 		saveframe <= '0';
+				-- 		framecnt <= 0;
+				-- 	ELSE
+				-- 		address <= STD_LOGIC_VECTOR(unsigned(address) + 1);
+				-- 	END IF;
+				-- ELSE
+					address <= STD_LOGIC_VECTOR(unsigned(address) + 1);
+				-- END IF;
+				cnt <= cnt + 1;
+			END IF;
 
+			IF hold_href = '0' AND latched_href = '1' THEN
+				duty <= STD_LOGIC_VECTOR(unsigned(duty) + 1);
+			END IF;
 
-	cnt <= cnt + 1;
-      end if;
+			hold_href <= latched_href;
+			-- capturing the data from the camera, 12-bit RGB
+			IF latched_href = '1' THEN
+				href_last <= (OTHERS => '0');
+				hold_data <= hold_data(7 DOWNTO 0) & latched_data;
+			END IF;
 
+			we_reg <= '0';
 
-
-      if hold_href = '0' and latched_href = '1' then
-	duty <= std_logic_vector(unsigned(duty)+1);
-      end if;
-
-      hold_href <= latched_href; 
-      -- capturing the data from the camera, 12-bit RGB
-      if latched_href = '1' then
-	href_last    <= (others => '0');
-	hold_data <= hold_data( 7 downto 0) & latched_data;
-      end if;
-
-      we_reg  <= '0';
-
-      -- If a new screen is about to start
-      if sw6 = '0' then
-	if latched_vsync = '1' then 
-	  duty        <= (others => '0');
-	  href_last   <= (others => '0');
-	  address	    <= (others => '0');
-	  cnt	    <= 0;
-	else
-	  if surv = '1' then 
-	    if href_last(href_last'high) = '1' then
-	      if duty = "10" then --and address /= 100101100000
-		if saveframe = '0' and cnt < 2400 then
-		  we_reg <= '1';
-		elsif saveframe = '1' and cnt < 2401 then
-		  we_reg <= '1';
-		else
-		  we_reg <= '0';
-		end if;
-	      end if;
-	      href_last <= (others => '0');
-	    else
-	      href_last <= href_last(href_last'high-1 downto 0) & latched_href;
-	    end if;
-	  else
-	    if href_last(href_last'high) = '1' then
-	      if duty = "10" then
-		we_reg <= '1';
-	      end if;
-	      href_last <= (others => '0');
-	    else
-	      href_last <= href_last(href_last'high-1 downto 0) & latched_href;
-	    end if;
-	  end if;
-	end if;
-      end if;
-    end if;
-  end process;
-end Behavioral;
+			-- If a new screen is about to start
+			IF sw6 = '0' THEN
+				IF latched_vsync = '1' THEN
+					duty <= (OTHERS => '0');
+					href_last <= (OTHERS => '0');
+					address <= (OTHERS => '0');
+					cnt <= 0;
+				ELSE
+					-- IF surv = '1' THEN
+					-- 	IF href_last(href_last'high) = '1' THEN
+					-- 		IF duty = "10" THEN --and address /= 100101100000
+					-- 			IF saveframe = '0' AND cnt < 2400 THEN
+					-- 				we_reg <= '1';
+					-- 			ELSIF saveframe = '1' AND cnt < 2401 THEN
+					-- 				we_reg <= '1';
+					-- 			ELSE
+					-- 				we_reg <= '0';
+					-- 			END IF;
+					-- 		END IF;
+					-- 		href_last <= (OTHERS => '0');
+					-- 	ELSE
+					-- 		href_last <= href_last(href_last'high - 1 DOWNTO 0) & latched_href;
+					-- 	END IF;
+					-- ELSE
+						IF href_last(href_last'high) = '1' THEN
+							IF duty = "10" THEN
+								we_reg <= '1';
+							END IF;
+							href_last <= (OTHERS => '0');
+						ELSE
+							href_last <= href_last(href_last'high - 1 DOWNTO 0) & latched_href;
+						END IF;
+					-- END IF;
+				END IF;
+			END IF;
+		END IF;
+	END PROCESS;
+END Behavioral;
