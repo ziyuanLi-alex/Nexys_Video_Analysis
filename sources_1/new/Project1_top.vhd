@@ -88,38 +88,28 @@ ARCHITECTURE rtl OF Project1_top IS
   --- COMPONENTS
   ---------------------------------------------------------------- 
 
-  ---------------------------
-  -- Clock Management
-  ---------------------------
   COMPONENT clk_wiz_0
-    PORT (-- Clock in ports
-      -- Clock out ports
+    PORT (
       clk_100M : OUT STD_LOGIC;
       clk_50M : OUT STD_LOGIC;
       clk_200M : OUT STD_LOGIC;
       clk_25M : OUT STD_LOGIC;
-      -- Status and control signals
       locked : OUT STD_LOGIC;
       clk_in : IN STD_LOGIC
     );
   END COMPONENT;
 
-  ---------------------------
-  -- Display Components
-  ---------------------------
-  -- Segment Display Controller
   COMPONENT display
     PORT (
-      clk : IN STD_LOGIC; -- 100MHz系统时钟
-      number : IN STD_LOGIC_VECTOR (15 DOWNTO 0); -- 8位数字的输入数据(每个数字4位，共8*4=32位)
-      seg : OUT STD_LOGIC_VECTOR (6 DOWNTO 0); -- 段码(最低位为小数点)
-      an : OUT STD_LOGIC_VECTOR (7 DOWNTO 0)); -- 位选信号
+      clk : IN STD_LOGIC;
+      number : IN STD_LOGIC_VECTOR (15 DOWNTO 0);
+      seg : OUT STD_LOGIC_VECTOR (6 DOWNTO 0);
+      an : OUT STD_LOGIC_VECTOR (7 DOWNTO 0)
+    );
   END COMPONENT;
 
-  -- VGA Display Controller
   COMPONENT vga_driver
     GENERIC (
-      -- VGA时序参数 (默认640x480 @ 60Hz)
       H_VISIBLE_AREA : INTEGER := 640;
       H_FRONT_PORCH : INTEGER := 16;
       H_SYNC_PULSE : INTEGER := 96;
@@ -130,44 +120,27 @@ ARCHITECTURE rtl OF Project1_top IS
       V_SYNC_PULSE : INTEGER := 2;
       V_BACK_PORCH : INTEGER := 33;
       V_WHOLE_FRAME : INTEGER := 525;
-
-      -- 帧缓冲区尺寸 - 已更新为320x240
       FB_WIDTH : INTEGER := 320;
       FB_HEIGHT : INTEGER := 240;
-
-      -- 颜色格式 (默认RGB565)
       RED_BITS : INTEGER := 5;
       GREEN_BITS : INTEGER := 6;
       BLUE_BITS : INTEGER := 5;
-
-      -- 输出颜色深度 (VGA输出每种颜色的位数)
       OUTPUT_BITS : INTEGER := 4
     );
     PORT (
-      -- Clock and reset
-      clk : IN STD_LOGIC; -- Pixel clock
-      rst : IN STD_LOGIC; -- Reset signal
-
-      -- Frame buffer interface
-      fb_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- For 80x60 = 4800 pixels
-      fb_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565 pixel data
-
-      -- VGA outputs
+      clk : IN STD_LOGIC;
+      rst : IN STD_LOGIC;
+      fb_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0);
+      fb_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
       hsync : OUT STD_LOGIC;
       vsync : OUT STD_LOGIC;
       red : OUT STD_LOGIC_VECTOR(OUTPUT_BITS - 1 DOWNTO 0);
       green : OUT STD_LOGIC_VECTOR(OUTPUT_BITS - 1 DOWNTO 0);
       blue : OUT STD_LOGIC_VECTOR(OUTPUT_BITS - 1 DOWNTO 0);
-
-      -- Display resolution selection (optional for future use)
-      resolution_sel : IN STD_LOGIC_VECTOR(1 DOWNTO 0) := "00" -- 00: 640x480, 01: 320x240, 10: 800x600
+      resolution_sel : IN STD_LOGIC_VECTOR(1 DOWNTO 0) := "00"
     );
   END COMPONENT;
 
-  ---------------------------
-  -- Camera Components
-  ---------------------------
-  -- Camera Configuration and Control
   COMPONENT OV7670_driver
     PORT (
       iclk50 : IN STD_LOGIC;
@@ -176,82 +149,62 @@ ARCHITECTURE rtl OF Project1_top IS
       siod : INOUT STD_LOGIC;
       sw : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
       key : IN STD_LOGIC_VECTOR(3 DOWNTO 0)
-      --readcheck : OUT std_logic_vector (7 downto 0)
     );
   END COMPONENT;
 
-  -- Camera Data Capture
   COMPONENT OV7670_capture
     PORT (
-      pclk : IN STD_LOGIC; -- camera clock
+      pclk : IN STD_LOGIC;
       vsync : IN STD_LOGIC;
       href : IN STD_LOGIC;
-      dport : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- data        
+      dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0);
+      addr : OUT STD_LOGIC_VECTOR (16 DOWNTO 0); -- 17位地址
+      dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0);
+      we : OUT STD_LOGIC;
+      -- 废弃接口保留但忽略
       surv : IN STD_LOGIC;
       sw5 : IN STD_LOGIC;
       sw6 : IN STD_LOGIC;
-      addr : OUT STD_LOGIC_VECTOR(12 DOWNTO 0); --test 18, 14 previous
-      dout : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
-      we : OUT STD_LOGIC; -- write enable
-      maxx : OUT NATURAL -- write enable
+      maxx : OUT NATURAL
     );
   END COMPONENT;
 
-  ---------------------------
-  -- Memory Components
-  ---------------------------
-  -- Frame Buffer
   COMPONENT framebuffer
     PORT (
-      -- 写入接口（80x60分辨率 = 4800像素）
       data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-      wraddress : IN STD_LOGIC_VECTOR(12 DOWNTO 0); -- 13位足够寻址4800像素
+      wraddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
       wrclock : IN STD_LOGIC;
       wren : IN STD_LOGIC;
-
-      -- 读取接口（支持320x240分辨率 = 76800像素）
-      rdaddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 17位支持76800像素
+      rdaddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
       rdclock : IN STD_LOGIC;
       q : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
     );
   END COMPONENT;
 
-  ---------------------------
-  -- Graphics & Test Pattern Components
-  ---------------------------
-  -- Test Pattern Generator
   COMPONENT test_pattern_generator IS
     PORT (
-      data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- Input data (unused in this module)
-      wraddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- Write address (unused in this module)
-      wrclock : IN STD_LOGIC; -- Write clock
-      wren : IN STD_LOGIC; -- Write enable (used to select test pattern)
-      rdaddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- Read address from VGA controller
-      rdclock : IN STD_LOGIC; -- Read clock (VGA clock)
-      q : OUT STD_LOGIC_VECTOR(15 DOWNTO 0) -- Output pixel data for test pattern
+      data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+      wraddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+      wrclock : IN STD_LOGIC;
+      wren : IN STD_LOGIC;
+      rdaddress : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+      rdclock : IN STD_LOGIC;
+      q : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
     );
   END COMPONENT;
 
-  -- Input Source Selector
   COMPONENT input_selector IS
     PORT (
-      -- 控制信号
-      clk : IN STD_LOGIC; -- 时钟信号
-      select_input : IN STD_LOGIC; -- 输入选择信号 (0=摄像头, 1=测试图案)
-
-      -- 摄像头/帧缓冲区接口
-      fb_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 帧缓冲区读地址输出
-      fb_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 帧缓冲区数据输入
-
-      -- 测试图案接口
-      tp_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 测试图案读地址输出
-      tp_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案数据输入
-      tp_select : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案选择
-      tp_pattern : IN STD_LOGIC_VECTOR(2 DOWNTO 0); -- 测试图案模式选择
-
-      -- 输出接口 (连接到VGA驱动器)
-      vga_addr : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- VGA请求地址输入
-      vga_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0) -- VGA数据输出
+      clk : IN STD_LOGIC;
+      select_input : IN STD_LOGIC;
+      fb_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+      fb_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+      tp_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+      tp_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+      tp_select : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
+      tp_pattern : IN STD_LOGIC_VECTOR(2 DOWNTO 0);
+      vga_addr : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+      vga_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
     );
   END COMPONENT;
 
@@ -308,37 +261,35 @@ ARCHITECTURE rtl OF Project1_top IS
   ---------------------------
   -- Clock Signals
   ---------------------------
-  SIGNAL xclk : STD_LOGIC := '0'; -- External clock signal
-  SIGNAL clk_100M : STD_LOGIC; -- 100MHz clock from PLL
-  SIGNAL clk_50M : STD_LOGIC; -- 50MHz clock from PLL
-  SIGNAL clk_200M : STD_LOGIC; -- 200MHz clock from PLL (for DDR)
-  SIGNAL clk_25M : STD_LOGIC; -- 25MHz clock from PLL (for VGA)
-  SIGNAL locked : STD_LOGIC; -- PLL lock indicator
+  SIGNAL xclk : STD_LOGIC := '0';
+  SIGNAL clk_100M : STD_LOGIC;
+  SIGNAL clk_50M : STD_LOGIC;
+  SIGNAL clk_200M : STD_LOGIC;
+  SIGNAL clk_25M : STD_LOGIC;
+  SIGNAL locked : STD_LOGIC;
 
-  -- Clock and timing constants
-  CONSTANT CLOCK_50_FREQ : INTEGER := 50000000; -- 50MHz clock frequency
-  CONSTANT BLINK_FREQ : INTEGER := 1; -- 1Hz blink frequency
-  CONSTANT CNT_MAX : INTEGER := CLOCK_50_FREQ/BLINK_FREQ/2 - 1; -- Counter max value for blink
-  CONSTANT BUZZ_MAX : INTEGER := CLOCK_50_FREQ * 3/BLINK_FREQ/2 - 1; -- Counter max for buzzer  
-
-  -- Blink counter and signal
-  SIGNAL cnt : unsigned(24 DOWNTO 0); -- Counter for LED blinking
-  SIGNAL blink : STD_LOGIC; -- Blink signal for status LED  
+  -- Timing signals (保持不变)
+  CONSTANT CLOCK_50_FREQ : INTEGER := 50000000;
+  CONSTANT BLINK_FREQ : INTEGER := 1;
+  CONSTANT CNT_MAX : INTEGER := CLOCK_50_FREQ/BLINK_FREQ/2 - 1;
+  CONSTANT BUZZ_MAX : INTEGER := CLOCK_50_FREQ * 3/BLINK_FREQ/2 - 1;
+  SIGNAL cnt : unsigned(24 DOWNTO 0);
+  SIGNAL blink : STD_LOGIC;
 
   ---------------------------
   -- Camera and Frame Buffer Signals
   ---------------------------
-  -- 帧捕获信号
-  SIGNAL capture_addr : STD_LOGIC_VECTOR(12 DOWNTO 0);  -- 存储捕获帧的地址
-  SIGNAL capture_data : STD_LOGIC_VECTOR(15 DOWNTO 0);  -- 来自摄像头的像素数据
-  SIGNAL capture_we : STD_LOGIC;                        -- 帧缓冲区写使能
-  SIGNAL config_finished : STD_LOGIC;                   -- 摄像头配置状态标志  
+  -- Camera and Frame Buffer Signals (仅修正地址位宽)
+  SIGNAL capture_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+  SIGNAL capture_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
+  SIGNAL capture_we : STD_LOGIC;
+  SIGNAL config_finished : STD_LOGIC;
 
   -- 模式控制信号
-  SIGNAL sw5 : STD_LOGIC := '0';              -- 运动检测器速度调整
-  SIGNAL sw6 : STD_LOGIC := '0';              -- 冻结捕获
-  SIGNAL survmode : STD_LOGIC := '0';         -- 监控模式（已废弃，保留兼容性）
-  SIGNAL rgb : STD_LOGIC;                     -- RGB/YCbCr 色彩模式选择器  
+  SIGNAL sw5 : STD_LOGIC := '0'; -- 运动检测器速度调整
+  SIGNAL sw6 : STD_LOGIC := '0'; -- 冻结捕获
+  SIGNAL survmode : STD_LOGIC := '0'; -- 监控模式（已废弃，保留兼容性）
+  SIGNAL rgb : STD_LOGIC; -- RGB/YCbCr 色彩模式选择器  
 
   ---------------------------
   -- Input Control Signals
@@ -365,16 +316,14 @@ ARCHITECTURE rtl OF Project1_top IS
   ---------------------------
   -- Video Pipeline Signals
   ---------------------------
-  -- Video data path signals
-  SIGNAL vga_request_addr : STD_LOGIC_VECTOR(16 DOWNTO 0);  -- VGA控制器请求的地址
-  SIGNAL output_yield_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 发送到VGA的最终像素数据
-  SIGNAL fb_addr : STD_LOGIC_VECTOR(16 DOWNTO 0);           -- 帧缓冲区读地址
-  SIGNAL fb_data : STD_LOGIC_VECTOR(15 DOWNTO 0);           -- 帧缓冲区数据输出
-  SIGNAL tp_addr : STD_LOGIC_VECTOR(16 DOWNTO 0);           -- 测试图案读地址
-  SIGNAL tp_data : STD_LOGIC_VECTOR(15 DOWNTO 0);           -- 测试图案数据输出
-  SIGNAL tp_select : STD_LOGIC_VECTOR(15 DOWNTO 0);         -- 测试图案选择控制
-  
-
+  -- Video Pipeline Signals
+  SIGNAL vga_request_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+  SIGNAL output_yield_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
+  SIGNAL fb_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+  SIGNAL fb_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
+  SIGNAL tp_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+  SIGNAL tp_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
+  SIGNAL tp_select : STD_LOGIC_VECTOR(15 DOWNTO 0);
 BEGIN
 
   ----------------------------------------------------------------
@@ -396,15 +345,13 @@ BEGIN
   -- hist_enable <= SW(7); -- SW7: 直方图显示开关
   -- hist_mode <= SW(6 DOWNTO 5); -- SW6-SW5: 直方图类型 (00:Y, 01:R, 10:G, 11:B)
   -- frame_start <= OV7670_VSYNC; -- 帧开始信号
-  
+
   -- 从VGA地址计算屏幕坐标 (简化版本，适用于320x240缩放到640x480)
   -- vga_x_coord <= STD_LOGIC_VECTOR(TO_UNSIGNED((TO_INTEGER(UNSIGNED(vga_request_addr)) MOD 320) * 2, 10));
   -- vga_y_coord <= STD_LOGIC_VECTOR(TO_UNSIGNED((TO_INTEGER(UNSIGNED(vga_request_addr)) / 320) * 2, 10));
   -- vga_display_active <= '1' WHEN TO_INTEGER(UNSIGNED(vga_request_addr)) < 76800 ELSE '0';
 
   -- final_pixel_data <= hist_pixel WHEN (hist_enable = '1' AND hist_pixel /= x"0000") ELSE output_yield_data;
-
-
   -- 时钟生成器
   clk_wiz : clk_wiz_0
   PORT MAP(
@@ -479,20 +426,20 @@ BEGIN
   --   resolution_sel => "00"
   -- );
 
-  -- 摄像头数据捕获
   ovcap : OV7670_capture PORT MAP
   (
     pclk => OV7670_PCLK,
     vsync => OV7670_VSYNC,
     href => OV7670_HREF,
     dport => OV7670_D,
+    addr => capture_addr,
+    dout => capture_data,
+    we => capture_we,
+    -- 废弃接口 - 连接但忽略
     surv => survmode,
     sw5 => sw5,
     sw6 => sw6,
-    addr => capture_addr,
-    dout => capture_data,
-    maxx => max,
-    we => capture_we
+    maxx => max
   );
 
   -- fb : framebuffer PORT MAP
@@ -505,11 +452,11 @@ BEGIN
   --   data => capture_data,
   --   wren => capture_we
   -- );
- frmb : framebuffer PORT MAP
+  frmb : framebuffer PORT MAP
   (
     rdclock => clk_50M,
-    rdaddress => fb_addr, -- 从input_selector接收地址
-    q => fb_data, -- 输出到input_selector
+    rdaddress => fb_addr,
+    q => fb_data,
     wrclock => OV7670_PCLK,
     wraddress => capture_addr,
     data => capture_data,
@@ -541,46 +488,42 @@ BEGIN
   test_pattern_gen : test_pattern_generator PORT MAP
   (
     data => tp_select,
-    wraddress => (OTHERS => '0'), -- 不使用
+    wraddress => (OTHERS => '0'),
     wrclock => clk_50M,
-    wren => '1', -- 始终启用
-    rdaddress => tp_addr, -- 从input_selector接收地址
+    wren => '1',
+    rdaddress => tp_addr,
     rdclock => clk_25M,
-    q => tp_data -- 输出到input_selector
+    q => tp_data
   );
 
   input_sel : input_selector PORT MAP
   (
     clk => clk_25M,
-    select_input => SW(9), -- 使用SW9选择输入源
-
-    fb_addr => fb_addr, -- 输出：发送到帧缓冲区的地址
-    fb_data => fb_data, -- 输入：从帧缓冲区接收的数据
-
-    tp_addr => tp_addr, -- 输出：发送到测试图案生成器的地址
-    tp_data => tp_data, -- 输入：从测试图案生成器接收的数据
-    tp_select => tp_select, -- 输出：发送到测试图案生成器的选择信号
-    tp_pattern => SW(2 DOWNTO 0), -- 输入：从开关接收的图案选择
-
-    vga_addr => vga_request_addr, -- 输入：从VGA驱动器接收的地址请求
-    vga_data => output_yield_data -- 输出：发送到VGA驱动器的数据
+    select_input => SW(9),
+    fb_addr => fb_addr,
+    fb_data => fb_data,
+    tp_addr => tp_addr,
+    tp_data => tp_data,
+    tp_select => tp_select,
+    tp_pattern => SW(2 DOWNTO 0),
+    vga_addr => vga_request_addr,
+    vga_data => output_yield_data
   );
-
 
   --   -- 直方图生成器实例化
   -- hist_gen : histogram_generator PORT MAP(
   --   clk => OV7670_PCLK,
   --   reset => '0',
-    
+
   --   -- 视频输入接口 - 直接使用capture数据
   --   pixel_data => capture_data,
   --   pixel_valid => capture_we,
   --   frame_start => frame_start,
-    
+
   --   -- 直方图存储接口
   --   hist_addr => hist_addr,
   --   hist_data => hist_data,
-    
+
   --   -- 控制接口
   --   mode => hist_mode
   -- );
@@ -589,18 +532,18 @@ BEGIN
   -- hist_disp : histogram_display PORT MAP(
   --   clk => clk_25M,
   --   reset => '0',
-    
+
   --   -- VGA位置输入
   --   x_pos => vga_x_coord,
   --   y_pos => vga_y_coord,
   --   active => vga_display_active,
-    
+
   --   -- 直方图数据输入
   --   hist_data => hist_data,
-    
+
   --   -- 直方图类型控制
   --   hist_type => hist_mode,
-    
+
   --   -- 像素输出
   --   pixel_out => hist_pixel,
   --   hist_addr => hist_addr

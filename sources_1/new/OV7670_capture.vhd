@@ -1,145 +1,179 @@
 ---------------------------------------------------------------------------------
--- 目的:
---    地址生成，连接到帧缓冲区
---    数据流，从相机到顶层设计再到VGA显示
---    写使能信号，从相机告知缓冲区何时写入数据
---
--- 使用OV7670的默认HREF和VSYNC设置。
-
--- 工作周期说明:
---    duty   href_last    hold_data         dout               we 
---    00        0         xxxxxxxxxxxxxxxx  xxxxxxxxxxxxxxxx   0   
---    01        0         xxxxxxxxRRRRRGGG  xxxxxxxxxxxxxxxx   0
---    10        0->1      RRRRRGGGGGGBBBBB  xxxxxxxxRRRRRGGG   0
---    11        0         GGGBBBBBxxxxxxxx  RRRRRGGGGGGBBBBB   1 
-----------------------------------------------------------------------------------
+-- OV7670摄像头驱动模块
+-- 原生分辨率：320x240 (QVGA)
+-- 数据格式：RGB565 (16位)
+-- 总像素数：76,800
+-- 地址宽度：17位
+-- 
+-- 功能：
+--   - 严格按照RGB565时序捕获数据
+--   - 输出直接匹配framebuffer接口
+--   - 支持320x240原生分辨率
+--   - 自动帧同步和地址管理
+---------------------------------------------------------------------------------
 LIBRARY IEEE;
 USE IEEE.STD_LOGIC_1164.ALL;
 USE IEEE.NUMERIC_STD.ALL;
 
 ENTITY OV7670_capture IS
-	PORT (
-		pclk : IN STD_LOGIC;                        -- 相机时钟输入
-		vsync : IN STD_LOGIC;                       -- 垂直同步信号
-		href : IN STD_LOGIC;                        -- 水平参考信号
-		surv : IN STD_LOGIC;                        -- 监控模式（已废弃，保留兼容性）
-		sw5 : IN STD_LOGIC;                         -- 调整运动检测速度
-		sw6 : IN STD_LOGIC;                         -- 冻结捕获
-		dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0);   -- 相机数据输入
-		addr : OUT STD_LOGIC_VECTOR (12 DOWNTO 0);  -- 输出地址
-		dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0);  -- 输出数据
-		we : OUT STD_LOGIC;                         -- 写使能信号
-		maxx : OUT NATURAL                          -- 最大运动值
-	);
+    PORT (
+        -- 摄像头接口
+        pclk : IN STD_LOGIC;                        -- 相机像素时钟(约12.5MHz for 320x240@30fps)
+        vsync : IN STD_LOGIC;                       -- 垂直同步信号
+        href : IN STD_LOGIC;                        -- 水平参考信号
+        dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0);   -- 相机8位数据输入
+        
+        -- framebuffer接口
+        addr : OUT STD_LOGIC_VECTOR (16 DOWNTO 0);  -- 17位地址，支持76,800像素
+        dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0);  -- RGB565数据输出
+        we : OUT STD_LOGIC;                         -- 写使能信号
+        
+        -- 控制和状态接口
+        enable : IN STD_LOGIC := '1';               -- 捕获使能信号
+        frame_done : OUT STD_LOGIC;                 -- 帧捕获完成标志
+        
+        -- 保留废弃接口（向后兼容）
+        surv : IN STD_LOGIC;                        -- 废弃信号
+        sw5 : IN STD_LOGIC;                         -- 废弃信号
+        sw6 : IN STD_LOGIC;                         -- 废弃信号
+        maxx : OUT NATURAL                          -- 调试输出：当前像素计数
+    );
 END OV7670_capture;
 
 ARCHITECTURE Behavioral OF OV7670_capture IS
-	-- 信号延迟说明:
-	-- latched信号比当前信号延迟一个时钟周期
-	-- hold信号比当前信号延迟两个时钟周期
-	
-	-- 控制信号
-	SIGNAL duty : STD_LOGIC_VECTOR(1 DOWNTO 0) := (OTHERS => '0');  -- 工作周期计数器
-	SIGNAL address : STD_LOGIC_VECTOR(12 DOWNTO 0) := (OTHERS => '0');  -- 内部地址计数器
-	SIGNAL we_reg : STD_LOGIC := '0';  -- 内部写使能寄存器
-	
-	-- 延迟信号
-	SIGNAL latched_vsync : STD_LOGIC := '0';  -- 延迟的垂直同步信号
-	SIGNAL latched_href : STD_LOGIC := '0';   -- 延迟的水平参考信号
-	SIGNAL latched_data : STD_LOGIC_VECTOR (7 DOWNTO 0) := (OTHERS => '0');  -- 延迟的数据
-	SIGNAL hold_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');     -- 保持的数据(RGB565)
-	SIGNAL hold_href : STD_LOGIC := '0';      -- 保持的水平参考信号
-	
-	-- RGB分量存储（未使用）
-	SIGNAL holdR : STD_LOGIC_VECTOR(3 DOWNTO 0) := (OTHERS => '0');
-	SIGNAL holdG : STD_LOGIC_VECTOR(3 DOWNTO 0) := (OTHERS => '0');
-	SIGNAL holdB : STD_LOGIC_VECTOR(3 DOWNTO 0) := (OTHERS => '0');
+    -- 320x240分辨率常量
+    CONSTANT QVGA_WIDTH : INTEGER := 320;
+    CONSTANT QVGA_HEIGHT : INTEGER := 240;
+    CONSTANT TOTAL_PIXELS : INTEGER := QVGA_WIDTH * QVGA_HEIGHT; -- 76,800
+    CONSTANT MAX_ADDRESS : INTEGER := TOTAL_PIXELS - 1;         -- 76,799
+    
+    -- 同步寄存器链（防止亚稳态）
+    SIGNAL vsync_sync : STD_LOGIC_VECTOR(2 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL href_sync : STD_LOGIC_VECTOR(2 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL data_sync : STD_LOGIC_VECTOR(7 DOWNTO 0) := (OTHERS => '0');
+    
+    -- 边沿检测
+    SIGNAL vsync_rising : STD_LOGIC;
+    SIGNAL href_rising : STD_LOGIC;
+    SIGNAL href_falling : STD_LOGIC;
+    
+    -- RGB565像素数据组装
+    SIGNAL first_byte : STD_LOGIC_VECTOR(7 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL pixel_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL byte_toggle : STD_LOGIC := '0'; -- 0=等待第一字节, 1=等待第二字节
+    
+    -- 地址和控制信号
+    SIGNAL address_counter : STD_LOGIC_VECTOR(16 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL write_enable : STD_LOGIC := '0';
+    SIGNAL capture_active : STD_LOGIC := '0';
+    
+    -- 帧和行控制
+    SIGNAL frame_active : STD_LOGIC := '0';
+    SIGNAL line_active : STD_LOGIC := '0';
+    SIGNAL frame_complete : STD_LOGIC := '0';
+    
+    -- 统计和调试信号
+    SIGNAL pixel_count : INTEGER RANGE 0 TO TOTAL_PIXELS := 0;
+    SIGNAL line_count : INTEGER RANGE 0 TO QVGA_HEIGHT := 0;
+    SIGNAL frame_count : INTEGER := 0;
+    
+    -- 地址和数据有效性检查
+    SIGNAL addr_valid : STD_LOGIC;
+    SIGNAL data_ready : STD_LOGIC;
 
-	-- 水平行计数
-	SIGNAL href_last : STD_LOGIC_VECTOR(6 DOWNTO 0) := (OTHERS => '0');  -- 延迟行检测移位寄存器
-	
-	-- 其他控制信号
-	SIGNAL halfaddress : STD_LOGIC := '0';  -- 未使用
-	SIGNAL saveframe : STD_LOGIC := '0';    -- 保存帧标志（已废弃）
-	SIGNAL cnt : NATURAL := 0;             -- 像素计数器
-	SIGNAL max : NATURAL := 0;             -- 最大运动值
-	SIGNAL framecnt : NATURAL := 0;        -- 帧计数器（已废弃）
-	SIGNAL framemax : NATURAL := 0;        -- 最大帧数（已废弃）
 BEGIN
-	-- 根据sw5调整帧率
-	WITH sw5 SELECT framemax <= 29 WHEN '0', 14 WHEN OTHERS;
+    -- 边沿检测信号
+    vsync_rising <= NOT vsync_sync(2) AND vsync_sync(1);
+    href_rising <= NOT href_sync(2) AND href_sync(1);
+    href_falling <= href_sync(2) AND NOT href_sync(1);
+    
+    -- 地址有效性检查
+    addr_valid <= '1' WHEN unsigned(address_counter) <= MAX_ADDRESS ELSE '0';
+    
+    -- 数据准备就绪检查
+    data_ready <= byte_toggle AND line_active AND addr_valid;
+    
+    -- 输出端口连接
+    addr <= address_counter;
+    dout <= pixel_data;
+    we <= write_enable;
+    frame_done <= frame_complete;
+    maxx <= pixel_count;
 
-	-- 端口映射
-	addr <= address;
-	we <= we_reg;
-	dout <= hold_data;
-
-	PROCESS (pclk)
-	BEGIN
-		maxx <= max;
-		
-		-- 在下降沿捕获数据
-		IF falling_edge(pclk) THEN
-			latched_data <= dport;
-			latched_href <= href;
-			latched_vsync <= vsync;
-		END IF;
-
-		-- 在上升沿处理数据
-		IF rising_edge(pclk) THEN
-			-- 当写使能有效时更新最大运动值和地址
-			IF we_reg = '1' THEN
-				-- 更新最大运动值
-				IF cnt > max THEN
-					max <= cnt;
-				END IF;
-				
-				-- 简化地址计数器，移除冗余的监控模式代码
-				address <= STD_LOGIC_VECTOR(unsigned(address) + 1);
-				cnt <= cnt + 1;
-			END IF;
-
-			-- 检测水平参考信号的上升沿，更新工作周期
-			IF hold_href = '0' AND latched_href = '1' THEN
-				duty <= STD_LOGIC_VECTOR(unsigned(duty) + 1);
-			END IF;
-
-			-- 更新保持的水平参考信号
-			hold_href <= latched_href;
-			
-			-- 当水平参考信号有效时，捕获相机数据（RGB565格式）
-			IF latched_href = '1' THEN
-				-- 清除行计数
-				href_last <= (OTHERS => '0');
-				-- 将当前数据移入保持寄存器
-				hold_data <= hold_data(7 DOWNTO 0) & latched_data;
-			END IF;
-
-			-- 默认禁用写使能
-			we_reg <= '0';
-
-			-- 帧处理逻辑
-			IF sw6 = '0' THEN -- 如果未冻结捕获
-				-- 帧开始时重置计数器
-				IF latched_vsync = '1' THEN
-					duty <= (OTHERS => '0');
-					href_last <= (OTHERS => '0');
-					address <= (OTHERS => '0');
-					cnt <= 0;
-				ELSE
-					-- 行处理逻辑，移除冗余监控模式
-					IF href_last(href_last'high) = '1' THEN
-						-- 当duty为10时启用写使能
-						IF duty = "10" THEN
-							we_reg <= '1';
-						END IF;
-						href_last <= (OTHERS => '0');
-					ELSE
-						-- 更新行计数移位寄存器
-						href_last <= href_last(href_last'high - 1 DOWNTO 0) & latched_href;
-					END IF;
-				END IF;
-			END IF;
-		END IF;
-	END PROCESS;
+    -- 主处理进程
+    capture_process: PROCESS(pclk)
+    BEGIN
+        IF rising_edge(pclk) THEN
+            -- 1. 输入信号同步化（3级同步防止亚稳态）
+            vsync_sync <= vsync_sync(1 DOWNTO 0) & vsync;
+            href_sync <= href_sync(1 DOWNTO 0) & href;
+            data_sync <= dport;
+            
+            -- 默认状态
+            write_enable <= '0';
+            frame_complete <= '0';
+            
+            -- 2. 帧开始检测
+            IF vsync_rising = '1' AND enable = '1' THEN
+                -- 新帧开始，初始化所有状态
+                address_counter <= (OTHERS => '0');
+                byte_toggle <= '0';
+                frame_active <= '1';
+                line_active <= '0';
+                pixel_count <= 0;
+                line_count <= 0;
+                frame_count <= frame_count + 1;
+                capture_active <= '1';
+                
+            ELSIF frame_active = '1' AND capture_active = '1' THEN
+                
+                -- 3. 行开始/结束处理
+                IF href_rising = '1' THEN
+                    -- 行开始
+                    line_active <= '1';
+                    byte_toggle <= '0';  -- 确保每行开始时字节对齐
+                    line_count <= line_count + 1;
+                    
+                ELSIF href_falling = '1' THEN
+                    -- 行结束
+                    line_active <= '0';
+                END IF;
+                
+                -- 4. 像素数据处理（仅在行有效期间）
+                IF line_active = '1' AND href_sync(1) = '1' THEN
+                    IF byte_toggle = '0' THEN
+                        -- 接收第一个字节：R[4:0] + G[5:3]
+                        first_byte <= data_sync;
+                        byte_toggle <= '1';
+                        
+                    ELSE
+                        -- 接收第二个字节：G[2:0] + B[4:0]
+                        -- 组装完整的RGB565像素
+                        pixel_data <= first_byte & data_sync;
+                        byte_toggle <= '0';
+                        
+                        -- 在地址有效范围内写入数据
+                        IF addr_valid = '1' THEN
+                            write_enable <= '1';
+                            pixel_count <= pixel_count + 1;
+                            
+                            -- 地址递增
+                            address_counter <= STD_LOGIC_VECTOR(unsigned(address_counter) + 1);
+                        END IF;
+                    END IF;
+                END IF;
+                
+                -- 5. 帧结束检测
+                IF line_count >= QVGA_HEIGHT OR 
+                   pixel_count >= TOTAL_PIXELS OR
+                   vsync_sync(1) = '1' THEN
+                    -- 帧捕获完成
+                    frame_active <= '0';
+                    capture_active <= '0';
+                    frame_complete <= '1';
+                END IF;
+            END IF;
+        END IF;
+    END PROCESS capture_process;
+    
 END Behavioral;
