@@ -37,6 +37,8 @@
 --
 -- j.inspir3@gmail.com, Git: BurningKoy
 ----------------------------------------------------------------------------------
+-- CONETENT ABOVE DEPRECATED！
+
 LIBRARY ieee;
 USE ieee.std_logic_1164.ALL;
 USE ieee.numeric_std.ALL;
@@ -84,14 +86,9 @@ ARCHITECTURE rtl OF Project1_top IS
   --- COMPONENTS
   ---------------------------------------------------------------- 
 
-  COMPONENT display
-    PORT (
-      clk : IN STD_LOGIC; -- 100MHz系统时钟
-      number : IN STD_LOGIC_VECTOR (15 DOWNTO 0); -- 8位数字的输入数据(每个数字4位，共8*4=32位)
-      seg : OUT STD_LOGIC_VECTOR (6 DOWNTO 0); -- 段码(最低位为小数点)
-      an : OUT STD_LOGIC_VECTOR (7 DOWNTO 0)); -- 位选信号
-  END COMPONENT;
-
+  ---------------------------
+  -- Clock Management
+  ---------------------------
   COMPONENT clk_wiz_0
     PORT (-- Clock in ports
       -- Clock out ports
@@ -105,38 +102,19 @@ ARCHITECTURE rtl OF Project1_top IS
     );
   END COMPONENT;
 
-  COMPONENT OV7670_driver
+  ---------------------------
+  -- Display Components
+  ---------------------------
+  -- Segment Display Controller
+  COMPONENT display
     PORT (
-      iclk50 : IN STD_LOGIC;
-      config_finished : OUT STD_LOGIC;
-      sioc : OUT STD_LOGIC;
-      siod : INOUT STD_LOGIC;
-      sw : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
-      key : IN STD_LOGIC_VECTOR(3 DOWNTO 0)
-      --readcheck : OUT std_logic_vector (7 downto 0)
-    );
+      clk : IN STD_LOGIC; -- 100MHz系统时钟
+      number : IN STD_LOGIC_VECTOR (15 DOWNTO 0); -- 8位数字的输入数据(每个数字4位，共8*4=32位)
+      seg : OUT STD_LOGIC_VECTOR (6 DOWNTO 0); -- 段码(最低位为小数点)
+      an : OUT STD_LOGIC_VECTOR (7 DOWNTO 0)); -- 位选信号
   END COMPONENT;
 
-  -- OVCapture gets the data from OV7670 camera
-
-  COMPONENT OV7670_capture
-    PORT (
-      pclk : IN STD_LOGIC; -- camera clock
-      vsync : IN STD_LOGIC;
-      href : IN STD_LOGIC;
-      dport : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- data        
-      surv : IN STD_LOGIC;
-      sw5 : IN STD_LOGIC;
-      sw6 : IN STD_LOGIC;
-      addr : OUT STD_LOGIC_VECTOR(12 DOWNTO 0); --test 18, 14 previous
-      dout : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
-      we : OUT STD_LOGIC; -- write enable
-      maxx : OUT NATURAL -- write enable
-    );
-  END COMPONENT;
-
-  -- VGA determines the active area as well as gets the data from frame buffer
-  --  Does the final setting of  r g b  output to the screen
+  -- VGA Display Controller
   COMPONENT vga_driver
     GENERIC (
       -- VGA时序参数 (默认640x480 @ 60Hz)
@@ -183,8 +161,44 @@ ARCHITECTURE rtl OF Project1_top IS
       resolution_sel : IN STD_LOGIC_VECTOR(1 DOWNTO 0) := "00" -- 00: 640x480, 01: 320x240, 10: 800x600
     );
   END COMPONENT;
-  -- The frame buffer is reference by OVdriver
-  -- and data input is by OVCapture
+
+  ---------------------------
+  -- Camera Components
+  ---------------------------
+  -- Camera Configuration and Control
+  COMPONENT OV7670_driver
+    PORT (
+      iclk50 : IN STD_LOGIC;
+      config_finished : OUT STD_LOGIC;
+      sioc : OUT STD_LOGIC;
+      siod : INOUT STD_LOGIC;
+      sw : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
+      key : IN STD_LOGIC_VECTOR(3 DOWNTO 0)
+      --readcheck : OUT std_logic_vector (7 downto 0)
+    );
+  END COMPONENT;
+
+  -- Camera Data Capture
+  COMPONENT OV7670_capture
+    PORT (
+      pclk : IN STD_LOGIC; -- camera clock
+      vsync : IN STD_LOGIC;
+      href : IN STD_LOGIC;
+      dport : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- data        
+      surv : IN STD_LOGIC;
+      sw5 : IN STD_LOGIC;
+      sw6 : IN STD_LOGIC;
+      addr : OUT STD_LOGIC_VECTOR(12 DOWNTO 0); --test 18, 14 previous
+      dout : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
+      we : OUT STD_LOGIC; -- write enable
+      maxx : OUT NATURAL -- write enable
+    );
+  END COMPONENT;
+
+  ---------------------------
+  -- Memory Components
+  ---------------------------
+  -- Frame Buffer
   COMPONENT framebuffer
     PORT (
       -- 写入接口（80x60分辨率 = 4800像素）
@@ -200,6 +214,10 @@ ARCHITECTURE rtl OF Project1_top IS
     );
   END COMPONENT;
 
+  ---------------------------
+  -- Graphics & Test Pattern Components
+  ---------------------------
+  -- Test Pattern Generator
   COMPONENT test_pattern_generator IS
     PORT (
       data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- Input data (unused in this module)
@@ -212,6 +230,7 @@ ARCHITECTURE rtl OF Project1_top IS
     );
   END COMPONENT;
 
+  -- Input Source Selector
   COMPONENT input_selector IS
     PORT (
       -- 控制信号
@@ -234,78 +253,124 @@ ARCHITECTURE rtl OF Project1_top IS
     );
   END COMPONENT;
 
+  ---------------------------
+  -- Image Analysis Components
+  ---------------------------
+  -- 直方图生成器
+  -- COMPONENT histogram_generator IS
+  --   PORT (
+  --     clk : IN STD_LOGIC; -- 时钟信号
+  --     reset : IN STD_LOGIC; -- 复位信号
+
+  --     -- 视频输入接口
+  --     pixel_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 输入像素数据 (RGB565格式)
+  --     pixel_valid : IN STD_LOGIC; -- 像素有效信号
+  --     frame_start : IN STD_LOGIC; -- 帧开始信号
+
+  --     -- 直方图存储接口
+  --     hist_addr : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图读取地址 (0-255)
+  --     hist_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据输出
+
+  --     -- 控制接口
+  --     mode : IN STD_LOGIC_VECTOR(1 DOWNTO 0) -- 00: Y亮度直方图, 01: R直方图, 10: G直方图, 11: B直方图
+  --   );
+  -- END COMPONENT;
+
+  -- -- 直方图显示
+  -- COMPONENT histogram_display IS
+  --   PORT (
+  --     clk : IN STD_LOGIC; -- 时钟信号
+  --     reset : IN STD_LOGIC; -- 复位信号
+
+  --     -- VGA位置输入
+  --     x_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- X坐标 (0-639)
+  --     y_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- Y坐标 (0-479)
+  --     active : IN STD_LOGIC; -- 显示区域有效信号
+
+  --     -- 直方图数据输入
+  --     hist_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据
+
+  --     -- 直方图类型控制
+  --     hist_type : IN STD_LOGIC_VECTOR(1 DOWNTO 0); -- 00: Y, 01: R, 10: G, 11: B
+
+  --     -- 像素输出
+  --     pixel_out : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565格式输出像素
+  --     hist_addr : OUT STD_LOGIC_VECTOR(7 DOWNTO 0) -- 直方图读取地址
+  --   );
+  -- END COMPONENT;
+
   ----------------------------------------------------------------
-  --- Variables
+  --- SIGNALS
   ----------------------------------------------------------------
-  SIGNAL xclk : STD_LOGIC := '0'; -- This will now be driven by clk_wiz_0
 
-  -- Signals for clk_wiz_0 outputs
-  SIGNAL clk_100M : STD_LOGIC; -- 100MHz output from clk_wiz_0 (if needed, or a buffered version)
-  SIGNAL clk_50M : STD_LOGIC; -- 50MHz output from clk_wiz_0
-  SIGNAL clk_200M : STD_LOGIC; -- 200MHz output from clk_wiz_0 (for DDR)
-  SIGNAL clk_25M : STD_LOGIC; -- 25MHz output from clk_wiz_0
-  SIGNAL locked : STD_LOGIC; -- Lock signal from clk_wiz_0
+  ---------------------------
+  -- Clock Signals
+  ---------------------------
+  SIGNAL xclk : STD_LOGIC := '0'; -- External clock signal
+  SIGNAL clk_100M : STD_LOGIC; -- 100MHz clock from PLL
+  SIGNAL clk_50M : STD_LOGIC; -- 50MHz clock from PLL
+  SIGNAL clk_200M : STD_LOGIC; -- 200MHz clock from PLL (for DDR)
+  SIGNAL clk_25M : STD_LOGIC; -- 25MHz clock from PLL (for VGA)
+  SIGNAL locked : STD_LOGIC; -- PLL lock indicator
 
-  CONSTANT CLOCK_50_FREQ : INTEGER := 50000000;
-  CONSTANT BLINK_FREQ : INTEGER := 1;
-  CONSTANT CNT_MAX : INTEGER := CLOCK_50_FREQ/BLINK_FREQ/2 - 1;
-  CONSTANT BUZZ_MAX : INTEGER := CLOCK_50_FREQ * 3/BLINK_FREQ/2 - 1;
+  -- Clock and timing constants
+  CONSTANT CLOCK_50_FREQ : INTEGER := 50000000; -- 50MHz clock frequency
+  CONSTANT BLINK_FREQ : INTEGER := 1; -- 1Hz blink frequency
+  CONSTANT CNT_MAX : INTEGER := CLOCK_50_FREQ/BLINK_FREQ/2 - 1; -- Counter max value for blink
+  CONSTANT BUZZ_MAX : INTEGER := CLOCK_50_FREQ * 3/BLINK_FREQ/2 - 1; -- Counter max for buzzer  
 
-  --Local wires
-  SIGNAL cnt : unsigned(24 DOWNTO 0);
-  SIGNAL blink : STD_LOGIC;
+  -- Blink counter and signal
+  SIGNAL cnt : unsigned(24 DOWNTO 0); -- Counter for LED blinking
+  SIGNAL blink : STD_LOGIC; -- Blink signal for status LED  
 
-  -- SIGNAL buffer_addr : STD_LOGIC_VECTOR(16 DOWNTO 0) := (OTHERS => '0');
-  -- SIGNAL buffer_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
-  SIGNAL capture_addr : STD_LOGIC_VECTOR(12 DOWNTO 0);
-  SIGNAL capture_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
-  SIGNAL capture_we : STD_LOGIC; -- write enable.
-  SIGNAL config_finished : STD_LOGIC;
-  --modes
-  -- SIGNAL surveillance : STD_LOGIC;
-  -- SIGNAL surveillance2 : STD_LOGIC;
-  SIGNAL sw5 : STD_LOGIC;
-  SIGNAL sw6 : STD_LOGIC;
-  SIGNAL survmode : STD_LOGIC;
-  SIGNAL rgb : STD_LOGIC;
+  ---------------------------
+  -- Camera and Frame Buffer Signals
+  ---------------------------
+  -- Frame capture signals
+  SIGNAL capture_addr : STD_LOGIC_VECTOR(12 DOWNTO 0); -- Address for storing captured frame
+  SIGNAL capture_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Pixel data from camera
+  SIGNAL capture_we : STD_LOGIC; -- Write enable for frame buffer
+  SIGNAL config_finished : STD_LOGIC; -- Camera configuration status  
 
-  --buttons
-  SIGNAL KEY : STD_LOGIC_VECTOR(3 DOWNTO 0);
+  -- Mode control signals
+  SIGNAL sw5 : STD_LOGIC; -- Speed adjustment for motion detector
+  SIGNAL sw6 : STD_LOGIC; -- Freeze capture
+  SIGNAL survmode : STD_LOGIC; -- Surveillance mode
+  SIGNAL rgb : STD_LOGIC; -- RGB/YCbCr color mode selector  
 
-  --debugging
-  SIGNAL mSEG7 : STD_LOGIC_VECTOR (15 DOWNTO 0) := (OTHERS => '0');
-  -- SIGNAL debug : NATURAL := 0;
-  -- SIGNAL debug2 : NATURAL := 0;
-  SIGNAL max : NATURAL := 0;
-  -- SIGNAL leftmotion : NATURAL := 0;
-  -- SIGNAL rightmotion : NATURAL := 0;
-  -- SIGNAL newframe : STD_LOGIC;
-  -- SIGNAL summax : NATURAL := 0;
-  --signal motionaddr : std_logic_vector(3 downto 0) := (others => '0');
-  --signal sums : unsigned(15 downto 0) := (others => '0');
+  ---------------------------
+  -- Input Control Signals
+  ---------------------------
+  -- Button signals combined
+  SIGNAL KEY : STD_LOGIC_VECTOR(3 DOWNTO 0); -- Combined button inputs  
 
-  --audio
-  -- CONSTANT BUZZER_THRESHOLD : NATURAL := 7500; -- magic number from heuristicsis max should be 320*480 however..
-  -- SIGNAL left : STD_LOGIC;
-  -- SIGNAL AUD_CTRL_CLK : STD_LOGIC;
-  -- SIGNAL buzzer : STD_LOGIC := '0';
-  -- SIGNAL buzzercnt : unsigned(31 DOWNTO 0);
+  ---------------------------
+  -- Debug and Display Signals
+  ---------------------------
+  -- Debug signals
+  SIGNAL mSEG7 : STD_LOGIC_VECTOR (15 DOWNTO 0) := (OTHERS => '0'); -- 7-segment display value
+  SIGNAL max : NATURAL := 0; -- Maximum motion value  
 
-  SIGNAL display_mode : STD_LOGIC := '0';
-  -- SIGNAL hist_pixel : STD_LOGIC_VECTOR(11 DOWNTO 0);
-  -- SIGNAL vga_x : STD_LOGIC_VECTOR(9 DOWNTO 0);
-  -- SIGNAL vga_y : STD_LOGIC_VECTOR(9 DOWNTO 0);
+  -- Display mode control
+  SIGNAL display_mode : STD_LOGIC := '0'; -- Display mode selector  
 
-  SIGNAL test_pattern_select : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+  ---------------------------
+  -- Graphics and Pattern Signals
+  ---------------------------
+  -- Test pattern signals
+  SIGNAL test_pattern_select : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0'); -- Test pattern selection  
 
-  SIGNAL vga_request_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- VGA驱动器输出的地址请求
-  SIGNAL output_yield_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 选择后的像素数据输出到VGA
-  SIGNAL fb_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 帧缓冲区地址
-  SIGNAL fb_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 帧缓冲区数据
-  SIGNAL tp_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 测试图案地址
-  SIGNAL tp_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案数据
-  SIGNAL tp_select : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案选择
-
+  ---------------------------
+  -- Video Pipeline Signals
+  ---------------------------
+  -- Video data path signals
+  SIGNAL vga_request_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- Address request from VGA controller
+  SIGNAL output_yield_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Final pixel data to VGA
+  SIGNAL fb_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- Frame buffer read address
+  SIGNAL fb_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Frame buffer data output
+  SIGNAL tp_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- Test pattern read address
+  SIGNAL tp_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Test pattern data output
+  SIGNAL tp_select : STD_LOGIC_VECTOR(15 DOWNTO 0); -- Test pattern selection control
 BEGIN
 
   ----------------------------------------------------------------
@@ -316,16 +381,7 @@ BEGIN
 
   -- Switch input handling
   -- Note: SW1 to 6 used by ovregisters (mentioned in comment)
-  -- WITH SW(3) SELECT 
-  --     rgb <= '1' WHEN '1',          -- When SW(3) is ON (SW(3)='1'), rgb='1'
-  --            '0' WHEN OTHERS;        -- Otherwise, rgb='0'
-  rgb <= SW(3);
-
-  -- WITH SW(5) SELECT sw5 <= '1' WHEN '1', '0' WHEN OTHERS;
-  -- WITH SW(6) SELECT sw6 <= '1' WHEN '1', '0' WHEN OTHERS;
-  -- WITH SW(7) SELECT surveillance <= '1' WHEN '1', '0' WHEN OTHERS;
-  -- WITH SW(8) SELECT surveillance2 <= '1' WHEN '1', '0' WHEN OTHERS;
-  -- WITH SW(8) SELECT display_mode <= '1' WHEN '1', '0' WHEN OTHERS;
+  rgb <= SW(3); -- Color mode selection: RGB when SW3 is on
 
   test_pattern_select(2 DOWNTO 0) <= SW(2 DOWNTO 0); -- Test pattern select
 
