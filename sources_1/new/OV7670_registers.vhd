@@ -2,6 +2,7 @@
 -- Register settings
 -- Purpose: Load register values before sending.
 --------------------------------------------------------------------------------------
+
 LIBRARY IEEE;
 USE IEEE.STD_LOGIC_1164.ALL;
 USE IEEE.NUMERIC_STD.ALL;
@@ -69,53 +70,61 @@ BEGIN
 
 			--   if survmode = '0' then
 			CASE nextRegAddr IS
-				WHEN x"00" => sreg <= x"1281"; -- COM7   Reset -- Do it twice to make sure its wiped
-				WHEN x"01" => sreg <= x"1281"; -- COM7   Reset -- choose output format. 
-				WHEN x"02" => sreg <= x"1101"; -- CLKRC  Prescaler then multiplied by 4 for 25mhz. 30fps.
-				WHEN x"03" => sreg <= colour_reg; -- COM7   VGA + RGB output
-				WHEN x"04" => sreg <= x"0C04"; -- COM3  Lots of stuff, enable scaling, all others off
-				WHEN x"05" => sreg <= x"3E19"; -- COM14  PCLK scaling = 2 when x"05" => sreg <= x"3E00"; -- COM14  PCLK scaling = 0
-				WHEN x"06" => sreg <= x"4010"; -- COM15  Full 0-255 output, RGB 565
-				WHEN x"07" => sreg <= x"3a04"; -- TSLB   Set UV ordering,  do not auto-reset window
-					--when x"08" => sreg <= x"8C00"; -- RGB444 Set RGB format -- must be low for rgb 565 to work
-				WHEN x"08" => sreg <= x"8C02"; -- RGB444 
+					-- =====================================================
+					-- 1. 系统复位和基本时钟配置
+					-- =====================================================
+				WHEN x"00" => sreg <= x"1280"; -- COM7   系统复位 - 复位所有寄存器到默认值
+				WHEN x"01" => sreg <= x"1280"; -- COM7   系统复位 - 再次复位确保清除完全
+				WHEN x"02" => sreg <= x"1101"; -- CLKRC  内部时钟分频 - 预分频然后×4得到25MHz，30fps
 
-				WHEN x"09" => sreg <= x"1714"; -- HSTART HREF start (high 8 bits)
-				WHEN x"0a" => sreg <= x"1802"; -- HSTOP  HREF stop (high 8 bits)
-				WHEN x"0b" => sreg <= x"32A4"; -- HREF   Edge offset and low 3 bits of HSTART and HSTOP
-				WHEN x"0c" => sreg <= x"1903"; -- VSTART VSYNC start (high 8 bits)
-				WHEN x"0d" => sreg <= x"1A7b"; -- VSTOP  VSYNC stop (high 8 bits) 
-				WHEN x"0e" => sreg <= x"038a"; -- VREF   VSYNC low two bits
+					-- =====================================================
+					-- 2. 输出格式和数据配置
+					-- =====================================================
+				WHEN x"03" => sreg <= colour_reg; -- COM7   输出格式配置 - VGA + RGB输出模式
+				WHEN x"04" => sreg <= x"0C04"; -- COM3   通用控制3 - 使能缩放功能，其他功能关闭
+				WHEN x"05" => sreg <= x"3E19"; -- COM14  通用控制14 - PCLK分频=2，手动缩放使能
+				WHEN x"06" => sreg <= x"4010"; -- COM15  通用控制15 - 全范围0-255输出，RGB565格式
+				WHEN x"07" => sreg <= x"3A04"; -- TSLB   行缓冲测试选项 - 设置UV输出顺序，不自动复位窗口
+				WHEN x"08" => sreg <= x"8C02"; -- RGB444 RGB444格式控制 - RGB444设置（必须为低电平使RGB565工作）
 
-				WHEN x"0f" => sreg <= x"703a"; -- SCALING_XSC -- default value. HScale. Can have test pattern.
-				WHEN x"10" => sreg <= x"7135"; -- SCALING_YSC -- default value. VScale. Can have test pattern.
+					-- =====================================================
+					-- 3. 图像窗口和帧时序配置
+					-- =====================================================
+				WHEN x"09" => sreg <= x"1714"; -- HSTART 行频开始位置（高8位） - HREF起始位置
+				WHEN x"0A" => sreg <= x"1802"; -- HSTOP  行频结束位置（高8位） - HREF结束位置
+				WHEN x"0B" => sreg <= x"32A4"; -- HREF   水平参考信号控制 - 边缘偏移和HSTART/HSTOP低3位
+				WHEN x"0C" => sreg <= x"1903"; -- VSTART 场频开始位置（高8位） - VSYNC起始位置
+				WHEN x"0D" => sreg <= x"1A7B"; -- VSTOP  场频结束位置（高8位） - VSYNC结束位置
+				WHEN x"0E" => sreg <= x"038A"; -- VREF   帧竖直方向控制 - VSYNC低2位和AGC高2位
 
-				WHEN x"11" => sreg <= x"7211"; -- SCALING_DCWCTR -- default value. H down sample by 8.
-				WHEN x"12" => sreg <= x"7301"; -- SCALING_PCLK_DIV -- default: 00. lowerbit = COM14. Prescale by 2.
-				WHEN x"13" => sreg <= x"a200"; -- SCALING_PCLK_DELAY  PCLK scaling = 4, must match COM14
+					-- =====================================================
+					-- 4. 图像缩放和像素时钟配置
+					-- =====================================================
+				WHEN x"0F" => sreg <= x"703A"; -- SCALING_XSC 水平缩放系数 - 默认值，可设置测试图案
+				WHEN x"10" => sreg <= x"7135"; -- SCALING_YSC 垂直缩放系数 - 默认值，可设置测试图案
+				WHEN x"11" => sreg <= x"7211"; -- SCALING_DCWCTR DCW控制 - 水平8倍降采样
+				WHEN x"12" => sreg <= x"7301"; -- SCALING_PCLK_DIV 像素时钟分频 - 2分频，需与COM14匹配
+				WHEN x"13" => sreg <= x"A200"; -- SCALING_PCLK_DELAY 像素时钟延迟 - PCLK缩放=4，必须与COM14匹配
 
-				WHEN x"14" => sreg <= x"1438"; -- COM9  - AGC Celling
-				WHEN x"15" => sreg <= test2; -- MTX1  - colour conversion matrix
-				WHEN x"16" => sreg <= test3; -- MTX2  - colour conversion matrix
-				WHEN x"17" => sreg <= test4; -- MTX3  - colour conversion matrix
-					--when x"15" => sreg <= x"4fb3"; -- MTX1  - colour conversion matrix
-					--when x"16" => sreg <= x"50b3"; -- MTX2  - colour conversion matrix
-					--when x"17" => sreg <= x"5100"; -- MTX3  - colour conversion matrix
-				WHEN x"18" => sreg <= x"523d"; -- MTX4  - colour conversion matrix
-				WHEN x"19" => sreg <= x"53a7"; -- MTX5  - colour conversion matrix
-				WHEN x"1A" => sreg <= x"54e4"; -- MTX6  - colour conversion matrix
-					--when x"18" => sreg <= x"52" & test2; -- MTX4  - colour conversion matrix
-					--when x"19" => sreg <= x"53" & test3; -- MTX5  - colour conversion matrix
-					--when x"1A" => sreg <= x"54" & test4; -- MTX6  - colour conversion matrix
-				WHEN x"1B" => sreg <= x"589e"; -- MTXS  - Matrix sign and auto contrast
-				WHEN x"1C" => sreg <= fps_reg; -- DBLV input clock
-				WHEN x"1d" => sreg <= x"3dc0"; -- COM13 - Turn on GAMMA and UV Auto adjust
-					--when x"1e" => sreg <= x"1500"; -- COM10 Use HREF not hSYNC
-				WHEN OTHERS => sreg <= x"ffff";
-					--case nextRegAddr is
-					--when x"1E" => cam_address <= READ_ADDRESS;
-					--when others => cam_address <= WRITE_ADDRESS;
-					--end case;
+					-- =====================================================
+					-- 5. 自动增益和颜色矩阵配置
+					-- =====================================================
+				WHEN x"14" => sreg <= x"1438"; -- COM9   通用控制9 - AGC增益上限设置
+				WHEN x"15" => sreg <= test2; -- MTX1   颜色转换矩阵系数1 - RGB颜色空间转换
+				WHEN x"16" => sreg <= test3; -- MTX2   颜色转换矩阵系数2 - RGB颜色空间转换
+				WHEN x"17" => sreg <= test4; -- MTX3   颜色转换矩阵系数3 - RGB颜色空间转换
+				WHEN x"18" => sreg <= x"523D"; -- MTX4   颜色转换矩阵系数4 - RGB颜色空间转换
+				WHEN x"19" => sreg <= x"53A7"; -- MTX5   颜色转换矩阵系数5 - RGB颜色空间转换
+				WHEN x"1A" => sreg <= x"54E4"; -- MTX6   颜色转换矩阵系数6 - RGB颜色空间转换
+				WHEN x"1B" => sreg <= x"589E"; -- MTXS   矩阵符号位和自动对比度控制
+
+					-- =====================================================
+					-- 6. 帧率和图像质量控制
+					-- =====================================================
+				WHEN x"1C" => sreg <= fps_reg; -- DBLV   PLL控制寄存器 - 输入时钟倍频设置
+				WHEN x"1D" => sreg <= x"3DC0"; -- COM13  通用控制13 - 开启GAMMA校正和UV自动调整
+
+				WHEN OTHERS => sreg <= x"FFFF";
 			END CASE;
 
 			--   else 
@@ -185,6 +194,54 @@ BEGIN
 		END IF;
 	END PROCESS;
 END Behavioral;
+
+-- =====================================================
+-- 寄存器功能说明：
+-- =====================================================
+-- COM7 (0x12): 通用控制7 - 系统复位和输出格式选择
+--   位[7]: SCCB寄存器复位 (1=复位)
+--   位[2]: RGB输出格式选择
+--   位[0]: Raw RGB输出格式选择
+
+-- COM3 (0x0C): 通用控制3 - 缩放和数据格式控制
+--   位[3]: 缩放使能 (1=使能)
+--   位[2]: DCW使能 (1=使能)
+
+-- COM14 (0x3E): 通用控制14 - 像素时钟分频控制
+--   位[4]: DCW和缩小PCLK使能
+--   位[3]: 手动缩放使能
+--   位[2:0]: PCLK分频系数
+
+-- COM15 (0x40): 通用控制15 - 数据范围和RGB格式
+--   位[7:6]: 数据输出范围选择
+--   位[5:4]: RGB555/565操作选择
+
+-- TSLB (0x3A): 行缓冲测试选项
+--   位[3]: 输出数据顺序控制
+--   位[0]: 自动输出窗口控制
+
+-- SCALING_XSC/YSC (0x70/0x71): 水平/垂直缩放系数
+--   位[7]: 测试图案控制位
+--   位[6:0]: 缩放系数
+
+-- MTX1-6 (0x4F-0x54): 颜色转换矩阵系数
+--   用于RGB颜色空间转换和颜色校正
+
+-- MTXS (0x58): 矩阵符号和对比度控制
+--   位[7]: 自动对比度中心使能
+--   位[5:0]: 颜色矩阵系数符号位
+
+-- DBLV (0x6B): PLL控制
+--   位[7:6]: PLL控制 (00=旁路, 01=4x, 10=6x, 11=8x)
+--   位[4]: 内部LDO控制
+
+-- COM13 (0x3D): 通用控制13
+--   位[7]: Gamma使能
+--   位[6]: UV饱和度自动调整
+
+
+
+
 --when x"2e" => sreg <= x"13E0"; -- COM8 - AGC, White balance
 --when x"2f" => sreg <= x"0000"; -- GAIN AGC 
 --when x"30" => sreg <= x"1000"; -- AECH Exposure
