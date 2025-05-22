@@ -505,7 +505,7 @@ BEGIN
   --   data => capture_data,
   --   wren => capture_we
   -- );
-  fb : framebuffer PORT MAP
+ frmb : framebuffer PORT MAP
   (
     rdclock => clk_50M,
     rdaddress => fb_addr, -- 从input_selector接收地址
