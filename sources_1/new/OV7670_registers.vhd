@@ -101,8 +101,8 @@ BEGIN
                 -- ---------------------------------------------------------
                 -- RGB565格式控制（重要）
                 -- ---------------------------------------------------------
-                WHEN x"04" => sreg <= x"4010"; -- COM15: 全范围输出，RGB565格式
-                -- WHEN x"04" => sreg <= x"40C0"; -- COM15: 不同范围（调试用）
+                -- WHEN x"04" => sreg <= x"4010"; -- COM15: 全范围输出，RGB565格式
+                WHEN x"04" => sreg <= x"40D0"; -- COM15: 可以输出最大范围
                 
                 WHEN x"05" => sreg <= x"3A04"; -- TSLB: UV输出顺序
                 -- WHEN x"05" => sreg <= x"3A0C"; -- TSLB: 不同顺序（调试用）
@@ -167,10 +167,12 @@ BEGIN
                 WHEN x"1A" => sreg <= x"1A7B"; -- VSTOP: VSYNC结束
                 WHEN x"1B" => sreg <= x"038A"; -- VREF: VSYNC控制
 
-				-- WHEN x"1C" => sreg <= x"1C00"; -- COM11: VSYNC控制
-				-- WHEN x"1D" => sreg <= x"1D00"; -- COM12: VSYNC控制
-				-- WHEN x"1E" => sreg <= x"1E00"; -- COM13: VSYNC控制
-				-- WHEN x"1F" => sreg <= x"1F00"; -- COM14: VSYNC控制
+				WHEN x"1C" => sreg <= x"00FF"; -- AGC: 使能自动增益
+				WHEN x"1D" => sreg <= x"0300"; -- AGC 
+				-- WHEN x"1E" => sreg <= x"0400"; -- COM13: VSYNC控制
+				-- WHEN x"1F" => sreg <= x"0700"; -- COM14: VSYNC控制
+				-- WHEN x"20" => sreg <= x"1000"; -- COM15: VSYNC控制
+
                 
                 -- ---------------------------------------------------------
                 -- 结束标志
