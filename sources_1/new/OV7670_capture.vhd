@@ -18,7 +18,7 @@ USE IEEE.NUMERIC_STD.ALL;
 ENTITY OV7670_capture IS
     PORT (
         -- 摄像头接口
-        pclk : IN STD_LOGIC;                        -- 相机像素时钟(约12.5MHz for 320x240@30fps)
+        pclk : IN STD_LOGIC;                        -- 相机像素时钟
         vsync : IN STD_LOGIC;                       -- 垂直同步信号
         href : IN STD_LOGIC;                        -- 水平参考信号
         dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0);   -- 相机8位数据输入
@@ -30,13 +30,7 @@ ENTITY OV7670_capture IS
         
         -- 控制和状态接口
         enable : IN STD_LOGIC := '1';               -- 捕获使能信号
-        frame_done : OUT STD_LOGIC;                 -- 帧捕获完成标志
-        
-        -- 保留废弃接口（向后兼容）
-        surv : IN STD_LOGIC;                        -- 废弃信号
-        sw5 : IN STD_LOGIC;                         -- 废弃信号
-        sw6 : IN STD_LOGIC;                         -- 废弃信号
-        maxx : OUT NATURAL                          -- 调试输出：当前像素计数
+        frame_done : OUT STD_LOGIC                 -- 帧捕获完成标志
     );
 END OV7670_capture;
 

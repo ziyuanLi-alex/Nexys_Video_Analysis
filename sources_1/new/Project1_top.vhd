@@ -160,12 +160,7 @@ ARCHITECTURE rtl OF Project1_top IS
       dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0);
       addr : OUT STD_LOGIC_VECTOR (16 DOWNTO 0); -- 17位地址
       dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0);
-      we : OUT STD_LOGIC;
-      -- 废弃接口保留但忽略
-      surv : IN STD_LOGIC;
-      sw5 : IN STD_LOGIC;
-      sw6 : IN STD_LOGIC;
-      maxx : OUT NATURAL
+      we : OUT STD_LOGIC
     );
   END COMPONENT;
 
@@ -207,6 +202,24 @@ ARCHITECTURE rtl OF Project1_top IS
       vga_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
     );
   END COMPONENT;
+
+component ideal_capture IS
+    PORT (
+        -- 时钟接口（与真实模块兼容）
+        pclk : IN STD_LOGIC;                        -- 像素时钟(约12.5MHz)
+        vsync : IN STD_LOGIC;                       -- 垂直同步信号（可选，用于外部同步）
+        href : IN STD_LOGIC;                        -- 水平参考信号（可选，用于外部同步）
+        dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0);   -- 数据输入（未使用）
+        
+        -- framebuffer接口
+        addr : OUT STD_LOGIC_VECTOR (16 DOWNTO 0);  -- 17位地址，支持76,800像素
+        dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0);  -- RGB565数据输出
+        we : OUT STD_LOGIC;                         -- 写使能信号
+        
+        -- 控制接口
+        reset : IN STD_LOGIC             -- 复位信号
+    );
+END component;
 
   ---------------------------
   -- Image Analysis Components
@@ -352,12 +365,12 @@ BEGIN
   ----------------------------------------------------------------
   --- PORTS
   ----------------------------------------------------------------
-  -- Button input handling (active-low buttons are converted to active-high signals)
+  -- Button input handling
   KEY <= btnd & btnr & btnl & btnu; -- Combine button signals into KEY vector
 
   -- Switch input handling
   -- Note: SW1 to 6 used by ovregisters (mentioned in comment)
-  rgb <= SW(3); -- Color mode selection: RGB when SW3 is on
+  -- rgb <= SW(3); -- Color mode selection: RGB when SW3 is on
 
   test_pattern_select(2 DOWNTO 0) <= SW(2 DOWNTO 0); -- Test pattern select
 
@@ -449,20 +462,32 @@ BEGIN
   --   resolution_sel => "00"
   -- );
 
-  ovcap : OV7670_capture PORT MAP
+  -- ovcap : OV7670_capture PORT MAP
+  -- (
+  --   pclk => OV7670_PCLK,
+  --   vsync => OV7670_VSYNC,
+  --   href => OV7670_HREF,
+  --   dport => OV7670_D,
+  --   addr => capture_addr,
+  --   dout => capture_data,
+  --   we => capture_we,
+  --   -- 废弃接口 - 连接但忽略
+  --   surv => survmode,
+  --   sw5 => sw5,
+  --   sw6 => sw6,
+  --   maxx => max
+  -- );
+
+  idcap : ideal_capture PORT MAP
   (
-    pclk => OV7670_PCLK,
+    pclk => clk_25M,
     vsync => OV7670_VSYNC,
     href => OV7670_HREF,
     dport => OV7670_D,
     addr => capture_addr,
     dout => capture_data,
     we => capture_we,
-    -- 废弃接口 - 连接但忽略
-    surv => survmode,
-    sw5 => sw5,
-    sw6 => sw6,
-    maxx => max
+    reset => KEY(2) -- 复位信号
   );
 
   -- fb : framebuffer PORT MAP
@@ -480,7 +505,7 @@ BEGIN
     rdclock => clk_50M,
     rdaddress => fb_addr,
     q => fb_data,
-    wrclock => OV7670_PCLK,
+    wrclock => clk_25M,
     wraddress => capture_addr,
     data => capture_data,
     wren => capture_we
@@ -690,15 +715,16 @@ BEGIN
 
   LED(0) <= blink; -- 系统心跳
   LED(1) <= config_finished; -- 相机配置完成
-  LED(2) <= debug_capture_active; -- 实时捕获活动（应该闪烁）
-  LED(3) <= OV7670_HREF; -- HREF状态（应该快速闪烁）
-  LED(4) <= OV7670_VSYNC; -- VSYNC状态（应该慢速闪烁）
-  LED(5) <= '1' WHEN debug_pixel_count > 0 ELSE
-  '0'; -- 像素计数指示
-  LED(6) <= '1' WHEN debug_href_count > 0 ELSE
-  '0'; -- HREF计数指示
-  LED(7) <= '1' WHEN debug_pclk_count > 0 ELSE
-  '0'; -- PCLK计数指示
-  LED(8) <= debug_valid_condition; -- 有效捕获条件指示
-  LED(9) <= NOT OV7670_VSYNC; -- VSYNC反相
+  LED(2) <= KEY(2);
+  -- LED(2) <= debug_capture_active; -- 实时捕获活动（应该闪烁）
+  -- LED(3) <= OV7670_HREF; -- HREF状态（应该快速闪烁）
+  -- LED(4) <= OV7670_VSYNC; -- VSYNC状态（应该慢速闪烁）
+  -- LED(5) <= '1' WHEN debug_pixel_count > 0 ELSE
+  -- '0'; -- 像素计数指示
+  -- LED(6) <= '1' WHEN debug_href_count > 0 ELSE
+  -- '0'; -- HREF计数指示
+  -- LED(7) <= '1' WHEN debug_pclk_count > 0 ELSE
+  -- '0'; -- PCLK计数指示
+  -- LED(8) <= debug_valid_condition; -- 有效捕获条件指示
+  -- LED(9) <= NOT OV7670_VSYNC; -- VSYNC反相
 END rtl;
