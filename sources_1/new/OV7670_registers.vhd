@@ -75,55 +75,55 @@ BEGIN
 					-- =====================================================
 				WHEN x"00" => sreg <= x"1280"; -- COM7   系统复位 - 复位所有寄存器到默认值
 				WHEN x"01" => sreg <= x"1280"; -- COM7   系统复位 - 再次复位确保清除完全
-				WHEN x"02" => sreg <= x"1180"; -- CLKRC  不进行内部时钟分频
+				WHEN x"02" => sreg <= x"11C0"; -- CLKRC  不进行内部时钟分频
 
 					-- =====================================================
 					-- 2. 输出格式和数据配置
 					-- =====================================================
 				-- WHEN x"03" => sreg <= colour_reg; -- COM7   输出格式配置 - VGA + RGB输出模式
-				when x"03" => sreg <= x"1211"; -- COM7   输出格式配置 - QGVA + RGB 不使能彩条
-				-- WHEN x"04" => sreg <= x"0C04"; -- COM3   通用控制3 - 使能缩放功能，其他功能关闭
-				WHEN x"05" => sreg <= x"3E19"; -- COM14  通用控制14 - PCLK分频=2，手动缩放使能
-				WHEN x"06" => sreg <= x"4010"; -- COM15  通用控制15 - 全范围0-255输出，RGB565格式
-				WHEN x"07" => sreg <= x"3A04"; -- TSLB   行缓冲测试选项 - 设置UV输出顺序，不自动复位窗口
-				WHEN x"08" => sreg <= x"8C02"; -- RGB444 RGB444格式控制 - RGB444设置（必须为低电平使RGB565工作）
+				-- when x"03" => sreg <= x"1214"; -- COM7   输出格式配置 - QGVA + RGB 不使能彩条
+				-- WHEN x"04" => sreg <= x"1E30"; -- MVFP  镜像翻转控制 - 水平翻转和垂直翻转使能
+				-- WHEN x"05" => sreg <= x"3E19"; -- COM14  通用控制14 - PCLK分频=2，手动缩放使能
+				-- WHEN x"06" => sreg <= x"4010"; -- COM15  通用控制15 - 全范围0-255输出，RGB565格式
+				-- WHEN x"07" => sreg <= x"3A04"; -- TSLB   行缓冲测试选项 - 设置UV输出顺序，不自动复位窗口
+				-- WHEN x"08" => sreg <= x"8C02"; -- RGB444 RGB444格式控制 - RGB444设置（必须为低电平使RGB565工作）
 
 					-- =====================================================
 					-- 3. 图像窗口和帧时序配置
 					-- =====================================================
-				WHEN x"09" => sreg <= x"1714"; -- HSTART 行频开始位置（高8位） - HREF起始位置
-				WHEN x"0A" => sreg <= x"1802"; -- HSTOP  行频结束位置（高8位） - HREF结束位置
-				WHEN x"0B" => sreg <= x"32A4"; -- HREF   水平参考信号控制 - 边缘偏移和HSTART/HSTOP低3位
-				WHEN x"0C" => sreg <= x"1903"; -- VSTART 场频开始位置（高8位） - VSYNC起始位置
-				WHEN x"0D" => sreg <= x"1A7B"; -- VSTOP  场频结束位置（高8位） - VSYNC结束位置
-				WHEN x"0E" => sreg <= x"038A"; -- VREF   帧竖直方向控制 - VSYNC低2位和AGC高2位
+				-- WHEN x"09" => sreg <= x"1714"; -- HSTART 行频开始位置（高8位） - HREF起始位置
+				-- WHEN x"0A" => sreg <= x"1802"; -- HSTOP  行频结束位置（高8位） - HREF结束位置
+				-- WHEN x"0B" => sreg <= x"32A4"; -- HREF   水平参考信号控制 - 边缘偏移和HSTART/HSTOP低3位
+				-- WHEN x"0C" => sreg <= x"1903"; -- VSTART 场频开始位置（高8位） - VSYNC起始位置
+				-- WHEN x"0D" => sreg <= x"1A7B"; -- VSTOP  场频结束位置（高8位） - VSYNC结束位置
+				-- WHEN x"0E" => sreg <= x"038A"; -- VREF   帧竖直方向控制 - VSYNC低2位和AGC高2位
 
 					-- =====================================================
 					-- 4. 图像缩放和像素时钟配置
 					-- =====================================================
-				WHEN x"0F" => sreg <= x"703A"; -- SCALING_XSC 水平缩放系数 - 默认值，可设置测试图案
-				WHEN x"10" => sreg <= x"7135"; -- SCALING_YSC 垂直缩放系数 - 默认值，可设置测试图案
-				WHEN x"11" => sreg <= x"7211"; -- SCALING_DCWCTR DCW控制 - 水平8倍降采样
-				WHEN x"12" => sreg <= x"7301"; -- SCALING_PCLK_DIV 像素时钟分频 - 2分频，需与COM14匹配
-				WHEN x"13" => sreg <= x"A200"; -- SCALING_PCLK_DELAY 像素时钟延迟 - PCLK缩放=4，必须与COM14匹配
+				WHEN x"0F" => sreg <= x"70BA"; -- SCALING_XSC 水平缩放系数 - 默认值，可设置测试图案
+				WHEN x"10" => sreg <= x"71B5"; -- SCALING_YSC 垂直缩放系数 - 默认值，可设置测试图案
+				-- WHEN x"11" => sreg <= x"7211"; -- SCALING_DCWCTR DCW控制 - 水平8倍降采样
+				-- WHEN x"12" => sreg <= x"7301"; -- SCALING_PCLK_DIV 像素时钟分频 - 2分频，需与COM14匹配
+				-- WHEN x"13" => sreg <= x"A200"; -- SCALING_PCLK_DELAY 像素时钟延迟 - PCLK缩放=4，必须与COM14匹配
 
 					-- =====================================================
 					-- 5. 自动增益和颜色矩阵配置
 					-- =====================================================
-				WHEN x"14" => sreg <= x"1438"; -- COM9   通用控制9 - AGC增益上限设置
-				WHEN x"15" => sreg <= test2; -- MTX1   颜色转换矩阵系数1 - RGB颜色空间转换
-				WHEN x"16" => sreg <= test3; -- MTX2   颜色转换矩阵系数2 - RGB颜色空间转换
-				WHEN x"17" => sreg <= test4; -- MTX3   颜色转换矩阵系数3 - RGB颜色空间转换
-				WHEN x"18" => sreg <= x"523D"; -- MTX4   颜色转换矩阵系数4 - RGB颜色空间转换
-				WHEN x"19" => sreg <= x"53A7"; -- MTX5   颜色转换矩阵系数5 - RGB颜色空间转换
-				WHEN x"1A" => sreg <= x"54E4"; -- MTX6   颜色转换矩阵系数6 - RGB颜色空间转换
-				WHEN x"1B" => sreg <= x"589E"; -- MTXS   矩阵符号位和自动对比度控制
+				-- WHEN x"14" => sreg <= x"1438"; -- COM9   通用控制9 - AGC增益上限设置
+				-- WHEN x"15" => sreg <= test2; -- MTX1   颜色转换矩阵系数1 - RGB颜色空间转换
+				-- WHEN x"16" => sreg <= test3; -- MTX2   颜色转换矩阵系数2 - RGB颜色空间转换
+				-- WHEN x"17" => sreg <= test4; -- MTX3   颜色转换矩阵系数3 - RGB颜色空间转换
+				-- WHEN x"18" => sreg <= x"523D"; -- MTX4   颜色转换矩阵系数4 - RGB颜色空间转换
+				-- WHEN x"19" => sreg <= x"53A7"; -- MTX5   颜色转换矩阵系数5 - RGB颜色空间转换
+				-- WHEN x"1A" => sreg <= x"54E4"; -- MTX6   颜色转换矩阵系数6 - RGB颜色空间转换
+				-- WHEN x"1B" => sreg <= x"589E"; -- MTXS   矩阵符号位和自动对比度控制
 
 					-- =====================================================
 					-- 6. 帧率和图像质量控制
 					-- =====================================================
-				WHEN x"1C" => sreg <= fps_reg; -- DBLV   PLL控制寄存器 - 输入时钟倍频设置
-				WHEN x"1D" => sreg <= x"3DC0"; -- COM13  通用控制13 - 开启GAMMA校正和UV自动调整
+				-- WHEN x"1C" => sreg <= fps_reg; -- DBLV   PLL控制寄存器 - 输入时钟倍频设置
+				-- WHEN x"1D" => sreg <= x"3DC0"; -- COM13  通用控制13 - 开启GAMMA校正和UV自动调整
 
 				WHEN OTHERS => sreg <= x"FFFF";
 			END CASE;
