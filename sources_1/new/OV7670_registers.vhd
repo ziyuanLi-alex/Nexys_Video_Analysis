@@ -43,7 +43,7 @@ ARCHITECTURE Behavioral OF OV7670_registers IS
     SIGNAL fps_reg : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"6b4a";
     SIGNAL colour_reg : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"1204";
     SIGNAL resend : STD_LOGIC;
-    SIGNAL survmode : STD_LOGIC;
+    -- SIGNAL survmode : STD_LOGIC;
 
 BEGIN
     -- 防抖处理（保持兼容）
@@ -63,7 +63,7 @@ BEGIN
     WITH sw(2) SELECT test2 <= x"4fff" WHEN '1', x"4fb3" WHEN OTHERS;
     WITH sw(3) SELECT test3 <= x"50ff" WHEN '1', x"50b3" WHEN OTHERS;
     WITH sw(4) SELECT test4 <= x"51ff" WHEN '1', x"5100" WHEN OTHERS;
-    WITH sw(7) SELECT survmode <= '1' WHEN '1', '0' WHEN OTHERS;
+    -- WITH sw(7) SELECT survmode <= '1' WHEN '1', '0' WHEN OTHERS;
 
     PROCESS (iclk)
     BEGIN
@@ -111,61 +111,66 @@ BEGIN
                 -- WHEN x"06" => sreg <= x"8C02"; -- RGB444: RGB444模式（调试用）
                 
                 -- ---------------------------------------------------------
-                -- 缩放和时钟控制（可选调试）
+                -- 缩放和时钟控制
                 -- ---------------------------------------------------------
                 -- WHEN x"07" => sreg <= x"0C04"; -- COM3: 使能缩放
-                -- WHEN x"07" => sreg <= x"0C00"; -- COM3: 禁用缩放（调试用）
+                WHEN x"07" => sreg <= x"0C00"; -- COM3: 禁用缩放（调试用）
                 
                 -- WHEN x"08" => sreg <= x"3E00"; -- COM14: PCLK不分频
-                -- WHEN x"08" => sreg <= x"3E19"; -- COM14: PCLK分频（调试用）
+                WHEN x"08" => sreg <= x"3E19"; -- COM14: PCLK分频（调试用） 00011001 PCLK Div=2
                 
                 -- ---------------------------------------------------------
                 -- 像素时钟和降采样控制（可选调试）
                 -- ---------------------------------------------------------
-                -- WHEN x"09" => sreg <= x"7200"; -- SCALING_DCWCTR: 不降采样
-                -- WHEN x"09" => sreg <= x"7211"; -- SCALING_DCWCTR: 降采样（调试用）
+                WHEN x"09" => sreg <= x"7200"; -- SCALING_DCWCTR: 不降采样
+                -- WHEN x"09" => sreg <= x"7211"; -- SCALING_DCWCTR: 降采样（默认）
                 
-                -- WHEN x"0A" => sreg <= x"7300"; -- SCALING_PCLK_DIV: 不分频
-                -- WHEN x"0A" => sreg <= x"7301"; -- SCALING_PCLK_DIV: 分频（调试用）
+                WHEN x"0A" => sreg <= x"7300"; -- SCALING_PCLK_DIV: DSP Scale Control（默认）
+                -- WHEN x"0A" => sreg <= x"7301"; -- SCALING_PCLK_DIV: 分频
                 
                 -- ---------------------------------------------------------
-                -- 缩放系数与测试图案
+                -- 缩放系数与测试图案 都设置为B会产生测试图案
                 -- ---------------------------------------------------------
                 -- WHEN x"0B" => sreg <= x"70BA"; -- SCALING_XSC: 水平缩放
-                -- WHEN x"0B" => sreg <= x"703A"; -- SCALING_XSC: 不同缩放（调试用）
-                
+                WHEN x"0B" => sreg <= x"703A"; -- SCALING_XSC: 不同缩放（可用）
+
                 -- WHEN x"0C" => sreg <= x"71B5"; -- SCALING_YSC: 垂直缩放
-                -- WHEN x"0C" => sreg <= x"7135"; -- SCALING_YSC: 不同缩放（调试用）
+                WHEN x"0C" => sreg <= x"7135"; -- SCALING_YSC: 不同缩放（可用）
                 
                 -- ---------------------------------------------------------
                 -- 同步和帧率控制（可选调试）
                 -- ---------------------------------------------------------
-                -- WHEN x"0D" => sreg <= x"1500"; -- COM10: 使用HREF
+                WHEN x"0D" => sreg <= x"1500"; -- COM10: 使用HREF
                 -- WHEN x"0D" => sreg <= x"1540"; -- COM10: 使用HSYNC（调试用）
                 
                 -- WHEN x"0E" => sreg <= fps_reg; -- DBLV: PLL控制
-                -- WHEN x"0E" => sreg <= x"6B0A"; -- DBLV: 不同PLL（调试用）
+                WHEN x"0E" => sreg <= x"6B0A"; -- DBLV: 不同PLL（调试用）
                 
                 -- ---------------------------------------------------------
                 -- 颜色矩阵（高级调试 - 可选）
                 -- ---------------------------------------------------------
-                -- WHEN x"0F" => sreg <= test2; -- MTX1: 颜色矩阵1
-                -- WHEN x"10" => sreg <= test3; -- MTX2: 颜色矩阵2  
-                -- WHEN x"11" => sreg <= test4; -- MTX3: 颜色矩阵3
-                -- WHEN x"12" => sreg <= x"523D"; -- MTX4: 颜色矩阵4
-                -- WHEN x"13" => sreg <= x"53A7"; -- MTX5: 颜色矩阵5
-                -- WHEN x"14" => sreg <= x"54E4"; -- MTX6: 颜色矩阵6
-                -- WHEN x"15" => sreg <= x"589E"; -- MTXS: 矩阵符号
+                WHEN x"0F" => sreg <= x"4F40"; -- MTX1: 颜色矩阵1
+                WHEN x"10" => sreg <= x"5034"; -- MTX2: 颜色矩阵2  
+                WHEN x"11" => sreg <= x"510C"; -- MTX3: 颜色矩阵3
+                WHEN x"12" => sreg <= x"5217"; -- MTX4: 颜色矩阵4
+                WHEN x"13" => sreg <= x"5329"; -- MTX5: 颜色矩阵5
+                WHEN x"14" => sreg <= x"5440"; -- MTX6: 颜色矩阵6
+                WHEN x"15" => sreg <= x"581E"; -- MTXS: 矩阵符号
                 
                 -- ---------------------------------------------------------
-                -- 窗口设置（高级调试 - 可选）
+                -- 窗口设置（可以消除不对的边缘像素） 
                 -- ---------------------------------------------------------
-                -- WHEN x"16" => sreg <= x"1714"; -- HSTART: HREF开始
-                -- WHEN x"17" => sreg <= x"1802"; -- HSTOP: HREF结束
-                -- WHEN x"18" => sreg <= x"32A4"; -- HREF: 边缘控制
-                -- WHEN x"19" => sreg <= x"1903"; -- VSTART: VSYNC开始
-                -- WHEN x"1A" => sreg <= x"1A7B"; -- VSTOP: VSYNC结束
-                -- WHEN x"1B" => sreg <= x"038A"; -- VREF: VSYNC控制
+                WHEN x"16" => sreg <= x"1714"; -- HSTART: HREF开始
+                WHEN x"17" => sreg <= x"1802"; -- HSTOP: HREF结束
+                WHEN x"18" => sreg <= x"32A4"; -- HREF: 边缘控制
+                WHEN x"19" => sreg <= x"1903"; -- VSTART: VSYNC开始
+                WHEN x"1A" => sreg <= x"1A7B"; -- VSTOP: VSYNC结束
+                WHEN x"1B" => sreg <= x"038A"; -- VREF: VSYNC控制
+
+				-- WHEN x"1C" => sreg <= x"1C00"; -- COM11: VSYNC控制
+				-- WHEN x"1D" => sreg <= x"1D00"; -- COM12: VSYNC控制
+				-- WHEN x"1E" => sreg <= x"1E00"; -- COM13: VSYNC控制
+				-- WHEN x"1F" => sreg <= x"1F00"; -- COM14: VSYNC控制
                 
                 -- ---------------------------------------------------------
                 -- 结束标志

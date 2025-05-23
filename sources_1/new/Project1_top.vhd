@@ -606,7 +606,7 @@ BEGIN
     rdclock => clk_50M,
     rdaddress => fb_addr,
     q => fb_data,
-    wrclock => clk_25M,
+    wrclock => OV7670_PCLK,
     wraddress => capture_addr,
     data => capture_data,
     wren => capture_we
