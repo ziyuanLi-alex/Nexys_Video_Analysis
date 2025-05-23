@@ -63,7 +63,7 @@ ENTITY Project1_top IS
     VGA_HS : OUT STD_LOGIC;
     VGA_VS : OUT STD_LOGIC;
 
-    number : IN STD_LOGIC_VECTOR (15 DOWNTO 0); -- 8位数字的输入数据(每个数字4位，共8*4=32位)
+    -- number : IN STD_LOGIC_VECTOR (15 DOWNTO 0); -- 8位数字的输入数据(每个数字4位，共8*4=32位)
     seg : OUT STD_LOGIC_VECTOR (6 DOWNTO 0); -- 段码(最低位为小数点)
     an : OUT STD_LOGIC_VECTOR (7 DOWNTO 0);
     SW : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
@@ -154,13 +154,18 @@ ARCHITECTURE rtl OF Project1_top IS
 
   COMPONENT OV7670_capture
     PORT (
-      pclk : IN STD_LOGIC;
-      vsync : IN STD_LOGIC;
-      href : IN STD_LOGIC;
-      dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0);
-      addr : OUT STD_LOGIC_VECTOR (16 DOWNTO 0); -- 17位地址
-      dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0);
-      we : OUT STD_LOGIC
+      -- 摄像头接口
+      pclk : IN STD_LOGIC; -- 相机像素时钟
+      vsync : IN STD_LOGIC; -- 垂直同步信号
+      href : IN STD_LOGIC; -- 水平参考信号
+      dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0); -- 相机8位数据输入
+
+      -- framebuffer接口（与ideal_capture完全匹配）
+      addr : OUT STD_LOGIC_VECTOR (16 DOWNTO 0); -- 17位地址，支持76,800像素
+      dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0); -- RGB565数据输出
+      we : OUT STD_LOGIC; -- 写使能信号
+
+      reset : IN STD_LOGIC -- 复位信号（与ideal_capture兼容）
     );
   END COMPONENT;
 
@@ -203,23 +208,38 @@ ARCHITECTURE rtl OF Project1_top IS
     );
   END COMPONENT;
 
-component ideal_capture IS
+  COMPONENT ideal_capture IS
     PORT (
-        -- 时钟接口（与真实模块兼容）
-        pclk : IN STD_LOGIC;                        -- 像素时钟(约12.5MHz)
-        vsync : IN STD_LOGIC;                       -- 垂直同步信号（可选，用于外部同步）
-        href : IN STD_LOGIC;                        -- 水平参考信号（可选，用于外部同步）
-        dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0);   -- 数据输入（未使用）
-        
-        -- framebuffer接口
-        addr : OUT STD_LOGIC_VECTOR (16 DOWNTO 0);  -- 17位地址，支持76,800像素
-        dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0);  -- RGB565数据输出
-        we : OUT STD_LOGIC;                         -- 写使能信号
-        
-        -- 控制接口
-        reset : IN STD_LOGIC             -- 复位信号
+      -- 时钟接口（与真实模块兼容）
+      pclk : IN STD_LOGIC; -- 像素时钟(约12.5MHz)
+      vsync : IN STD_LOGIC; -- 垂直同步信号（可选，用于外部同步）
+      href : IN STD_LOGIC; -- 水平参考信号（可选，用于外部同步）
+      dport : IN STD_LOGIC_VECTOR (7 DOWNTO 0); -- 数据输入（未使用）
+
+      -- framebuffer接口
+      addr : OUT STD_LOGIC_VECTOR (16 DOWNTO 0); -- 17位地址，支持76,800像素
+      dout : OUT STD_LOGIC_VECTOR (15 DOWNTO 0); -- RGB565数据输出
+      we : OUT STD_LOGIC; -- 写使能信号
+
+      -- 控制接口
+      reset : IN STD_LOGIC -- 复位信号
     );
-END component;
+  END COMPONENT;
+
+  COMPONENT pclk_frequency_meter IS
+    PORT (
+      -- 时钟和控制
+      clk_100m : IN STD_LOGIC; -- 100MHz参考时钟
+      reset : IN STD_LOGIC; -- 复位信号
+
+      -- 被测信号
+      pclk : IN STD_LOGIC; -- 待测PCLK信号
+
+      -- 输出
+      frequency_mhz : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 频率值（Hz）
+      freq_valid : OUT STD_LOGIC -- 频率值有效（每秒更新一次）
+    );
+  END COMPONENT;
 
   ---------------------------
   -- Image Analysis Components
@@ -360,6 +380,9 @@ END component;
   -- 数据验证信号
   SIGNAL data_changed : STD_LOGIC := '0';
   SIGNAL prev_data : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+
+  SIGNAL pclk_frequency : STD_LOGIC_VECTOR(15 DOWNTO 0);
+  SIGNAL freq_updated : STD_LOGIC;
 BEGIN
 
   ----------------------------------------------------------------
@@ -478,9 +501,9 @@ BEGIN
   --   maxx => max
   -- );
 
-  idcap : ideal_capture PORT MAP
+  ovcap : OV7670_capture PORT MAP
   (
-    pclk => clk_25M,
+    pclk => OV7670_PCLK,
     vsync => OV7670_VSYNC,
     href => OV7670_HREF,
     dport => OV7670_D,
@@ -489,6 +512,18 @@ BEGIN
     we => capture_we,
     reset => KEY(2) -- 复位信号
   );
+
+  -- idcap : ideal_capture PORT MAP
+  -- (
+  --   pclk => clk_25M,
+  --   vsync => OV7670_VSYNC,
+  --   href => OV7670_HREF,
+  --   dport => OV7670_D,
+  --   addr => capture_addr,
+  --   dout => capture_data,
+  --   we => capture_we,
+  --   reset => KEY(2) -- 复位信号
+  -- );
 
   -- fb : framebuffer PORT MAP
   -- (
@@ -597,6 +632,15 @@ BEGIN
   --   hist_addr => hist_addr
   -- );
 
+  freq_meter : pclk_frequency_meter
+  PORT MAP(
+    clk_100m => clk_100M,
+    reset => KEY(2),
+    pclk => OV7670_PCLK,
+    frequency_mhz => pclk_frequency,
+    freq_valid => freq_updated
+  );
+
   ----------------------------------------------------------------
   --- Processes
   ----------------------------------------------------------------
@@ -690,7 +734,7 @@ BEGIN
       CASE SW(8 DOWNTO 6) IS
         WHEN "000" => mSeg7 <= test_pattern_select;
         WHEN "001" => mSeg7 <= debug_frame_count; -- 正常增长到500+
-        WHEN "010" => mSeg7 <= debug_vsync_low_count; -- 变化过快显示为8888
+        WHEN "010" => mSeg7 <= pclk_frequency; -- 017d大约为25MHz
         WHEN "011" => mSeg7 <= debug_last_data; -- 显示0000
         WHEN "100" => mSeg7 <= debug_pixel_count(15 DOWNTO 0); -- 快速变化的大数字
         WHEN "101" => mSeg7 <= debug_href_count; -- 快速变化的大数字
