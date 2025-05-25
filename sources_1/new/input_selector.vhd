@@ -26,7 +26,11 @@ ENTITY input_selector IS
         -- display_mode : IN STD_LOGIC_VECTOR(2 DOWNTO 0); -- 000: 正常, 001: 测试图案, 010: 亮度直方图, 011: RGB直方图
         -- hist_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据输入
         -- hist_addr : OUT STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图地址输出
-        -- hist_mode : OUT STD_LOGIC_VECTOR(1 DOWNTO 0) -- 直方图模式选择: 00-亮度, 01-R, 10-G, 11-B
+
+        -- 保留的光流图像端口
+        -- flow_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 光流数据输入
+        -- flow_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 光流地址输出
+
     );
 END ENTITY input_selector;
 

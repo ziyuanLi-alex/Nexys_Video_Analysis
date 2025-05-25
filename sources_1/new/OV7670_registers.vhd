@@ -36,9 +36,9 @@ ARCHITECTURE Behavioral OF OV7670_registers IS
     CONSTANT read_address : STD_LOGIC_VECTOR(7 DOWNTO 0) := x"43";
     
     -- 开关控制寄存器（保持兼容）
-    SIGNAL test2 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-    SIGNAL test3 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-    SIGNAL test4 : STD_LOGIC_VECTOR(15 DOWNTO 0);
+    SIGNAL hstart_reg : STD_LOGIC_VECTOR(15 DOWNTO 0);
+    SIGNAL test_pattern_reg1 : STD_LOGIC_VECTOR(15 DOWNTO 0);
+    SIGNAL test_pattern_reg2 : STD_LOGIC_VECTOR(15 DOWNTO 0);
     SIGNAL test5 : STD_LOGIC_VECTOR(15 DOWNTO 0);
     SIGNAL fps_reg : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"6b4a";
     SIGNAL colour_reg : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"1204";
@@ -58,11 +58,11 @@ BEGIN
     WITH sreg SELECT reg_loaded <= '1' WHEN x"FFFF", '0' WHEN OTHERS;
     
     -- 开关控制（保持兼容）
-    WITH sw(0) SELECT colour_reg <= x"1200" WHEN '1', x"1204" WHEN OTHERS;
-    WITH sw(1) SELECT fps_reg <= x"6bca" WHEN '1', x"6b4a" WHEN OTHERS;
-    WITH sw(2) SELECT test2 <= x"4fff" WHEN '1', x"4fb3" WHEN OTHERS;
-    WITH sw(3) SELECT test3 <= x"50ff" WHEN '1', x"50b3" WHEN OTHERS;
-    WITH sw(4) SELECT test4 <= x"51ff" WHEN '1', x"5100" WHEN OTHERS;
+    WITH sw(0) SELECT test_pattern_reg1 <= x"70BA" WHEN '1', x"703A" WHEN OTHERS;
+	WITH sw(1) SELECT test_pattern_reg2 <= x"71B5" WHEN '1', x"7135" WHEN OTHERS;
+    WITH sw(2) SELECT hstart_reg <= x"1710" WHEN '1', x"1714" WHEN OTHERS;
+    -- WITH sw(3) SELECT test3 <= x"50ff" WHEN '1', x"50b3" WHEN OTHERS;
+    -- WITH sw(4) SELECT test4 <= x"51ff" WHEN '1', x"5100" WHEN OTHERS;
     -- WITH sw(7) SELECT survmode <= '1' WHEN '1', '0' WHEN OTHERS;
 
     PROCESS (iclk)
@@ -131,11 +131,11 @@ BEGIN
                 -- ---------------------------------------------------------
                 -- 缩放系数与测试图案 都设置为B会产生测试图案
                 -- ---------------------------------------------------------
-                -- WHEN x"0B" => sreg <= x"70BA"; -- SCALING_XSC: 水平缩放
-                WHEN x"0B" => sreg <= x"703A"; -- SCALING_XSC: 不同缩放（可用）
+                WHEN x"0B" => sreg <= test_pattern_reg1; -- SCALING_XSC: 水平缩放
+                -- WHEN x"0B" => sreg <= x"703A"; -- SCALING_XSC: 不同缩放（可用）
 
-                -- WHEN x"0C" => sreg <= x"71B5"; -- SCALING_YSC: 垂直缩放
-                WHEN x"0C" => sreg <= x"7135"; -- SCALING_YSC: 不同缩放（可用）
+                WHEN x"0C" => sreg <= test_pattern_reg2; -- SCALING_YSC: 垂直缩放
+                -- WHEN x"0C" => sreg <= x"7135"; -- SCALING_YSC: 不同缩放（可用）
                 
                 -- ---------------------------------------------------------
                 -- 同步和帧率控制（可选调试）
@@ -160,7 +160,7 @@ BEGIN
                 -- ---------------------------------------------------------
                 -- 窗口设置（可以消除不对的边缘像素） 
                 -- ---------------------------------------------------------
-                WHEN x"16" => sreg <= x"1714"; -- HSTART: HREF开始
+                WHEN x"16" => sreg <= hstart_reg; -- HSTART: HREF开始
                 WHEN x"17" => sreg <= x"1802"; -- HSTOP: HREF结束
                 WHEN x"18" => sreg <= x"32A4"; -- HREF: 边缘控制
                 WHEN x"19" => sreg <= x"1903"; -- VSTART: VSYNC开始
