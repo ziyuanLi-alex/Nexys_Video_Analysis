@@ -6,7 +6,7 @@ ENTITY input_selector IS
     PORT (
         -- 控制信号
         clk : IN STD_LOGIC; -- 时钟信号
-        select_input : IN STD_LOGIC; -- 输入选择信号 (0=摄像头, 1=测试图案)
+        select_input : IN STD_LOGIC_VECTOR(1 DOWNTO 0); -- 输入选择信号 (00=摄像头, 01=测试图案, 10=直方图, 11=光流)
 
         -- 摄像头/帧缓冲区接口
         fb_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 帧缓冲区读地址输出
@@ -18,39 +18,79 @@ ENTITY input_selector IS
         tp_select : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案选择
         tp_pattern : IN STD_LOGIC_VECTOR(2 DOWNTO 0); -- 测试图案模式选择
 
-        -- 输出接口 (连接到VGA驱动器)
+        -- VGA输出接口 (连接到VGA驱动器)
         vga_addr : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- VGA请求地址输入
-        vga_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0) -- VGA数据输出
+        vga_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- VGA数据输出
 
-        -- -- 简化的直方图相关端口
-        -- display_mode : IN STD_LOGIC_VECTOR(2 DOWNTO 0); -- 000: 正常, 001: 测试图案, 010: 亮度直方图, 011: RGB直方图
-        -- hist_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据输入
-        -- hist_addr : OUT STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图地址输出
-        -- hist_mode : OUT STD_LOGIC_VECTOR(1 DOWNTO 0) -- 直方图模式选择: 00-亮度, 01-R, 10-G, 11-B
+        -- 简化的直方图相关端口
+        hist_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 直方图读取地址
+        hist_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565格式输出像素
+
+        -- 保留的光流图像端口
+        flow_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 光流地址输出
+        flow_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0) -- 光流数据输入
     );
 END ENTITY input_selector;
 
 ARCHITECTURE rtl OF input_selector IS
-BEGIN
-    -- 将VGA地址请求转发到帧缓冲区和测试图案生成器
-    fb_addr <= vga_addr;
-    tp_addr <= vga_addr;
+    -- 内部信号
+    signal selected_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
 
-    -- 基于选择信号选择输出数据
+BEGIN
+    -- 地址路由逻辑 (组合逻辑)
+    PROCESS (select_input, vga_addr)
+    BEGIN
+        -- 默认值
+        fb_addr <= (others => '0');
+        tp_addr <= (others => '0');
+        hist_addr <= (others => '0');
+        flow_addr <= (others => '0');
+        
+        CASE select_input IS
+            WHEN "00" => -- 摄像头模式
+                fb_addr <= vga_addr;
+                
+            WHEN "01" => -- 测试图案模式
+                tp_addr <= vga_addr;
+                
+            WHEN "10" => -- 直方图模式
+                hist_addr <= vga_addr;
+                
+            WHEN "11" => -- 光流模式
+                flow_addr <= vga_addr;
+                
+            WHEN OTHERS =>
+                fb_addr <= vga_addr; -- 默认显示摄像头
+        END CASE;
+    END PROCESS;
+
+    -- 数据选择逻辑 (时序逻辑)
     PROCESS (clk)
     BEGIN
         IF rising_edge(clk) THEN
-            IF select_input = '0' THEN
-                -- 选择摄像头数据
-                vga_data <= fb_data;
-            ELSE
-                -- 选择测试图案数据
-                vga_data <= tp_data;
-            END IF;
+            CASE select_input IS
+                WHEN "00" => -- 摄像头模式
+                    selected_data <= fb_data;
+                    
+                WHEN "01" => -- 测试图案模式
+                    selected_data <= tp_data;
+                    
+                WHEN "10" => -- 直方图模式
+                    selected_data <= hist_data;
+                    
+                WHEN "11" => -- 光流模式
+                    selected_data <= flow_data;
+                    
+                WHEN OTHERS =>
+                    selected_data <= fb_data; -- 默认显示摄像头
+            END CASE;
 
             -- 将测试图案模式传递给测试图案生成器
             tp_select <= "0000000000000" & tp_pattern;
         END IF;
     END PROCESS;
+
+    -- 输出赋值
+    vga_data <= selected_data;
 
 END ARCHITECTURE rtl;
