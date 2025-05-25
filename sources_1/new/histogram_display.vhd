@@ -7,50 +7,65 @@ ENTITY histogram_display IS
     clk : IN STD_LOGIC; -- 时钟信号
     reset : IN STD_LOGIC; -- 复位信号
 
-    -- VGA位置输入
-    x_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- X坐标 (0-639)
-    y_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- Y坐标 (0-479)
-    active : IN STD_LOGIC; -- 显示区域有效信号
-
-    -- 直方图数据输入
-    hist_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据
+    -- 视频输出接口 (连接到input_selector)
+    hist_addr : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 17位视频地址输入 (来自VGA控制器)
+    hist_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565格式视频数据输出 (到VGA)
+    
+    -- 直方图数据源接口 (连接到histogram_generator)
+    hist_bin_addr : OUT STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图bin读取地址 (0-255)
+    hist_bin_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图bin数据输入 (来自histogram_generator)
 
     -- 直方图类型控制
-    hist_type : IN STD_LOGIC_VECTOR(1 DOWNTO 0); -- 00: Y, 01: R, 10: G, 11: B
-
-    -- 像素输出
-    pixel_out : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565格式输出像素
-    hist_addr : OUT STD_LOGIC_VECTOR(7 DOWNTO 0) -- 直方图读取地址
+    hist_type : IN STD_LOGIC_VECTOR(1 DOWNTO 0) -- 00: Y, 01: R, 10: G, 11: B
   );
 END histogram_display;
 
 ARCHITECTURE Behavioral OF histogram_display IS
-  -- 常量定义
-  CONSTANT HIST_WIDTH : INTEGER := 512; -- 直方图宽度
-  CONSTANT HIST_HEIGHT : INTEGER := 256; -- 直方图高度
-  CONSTANT HIST_X_OFFSET : INTEGER := 64; -- X偏移量
-  CONSTANT HIST_Y_OFFSET : INTEGER := 112; -- Y偏移量
+  -- 分辨率常量
+  CONSTANT SCREEN_WIDTH : INTEGER := 320;
+  CONSTANT SCREEN_HEIGHT : INTEGER := 240;
+  
+  -- 直方图全屏显示参数
+  CONSTANT HIST_WIDTH : INTEGER := 320; -- 直方图宽度 (全屏宽度)
+  CONSTANT HIST_HEIGHT : INTEGER := 200; -- 直方图高度 (留40像素给标题和标签)
+  CONSTANT HIST_X_OFFSET : INTEGER := 0; -- X偏移量 (全屏)
+  CONSTANT HIST_Y_OFFSET : INTEGER := 40; -- Y偏移量 (留顶部空间给标题)
 
   -- 内部信号
-  SIGNAL hist_x : INTEGER RANGE 0 TO 639;
-  SIGNAL hist_y : INTEGER RANGE 0 TO 479;
+  SIGNAL x_pos : INTEGER RANGE 0 TO SCREEN_WIDTH-1;
+  SIGNAL y_pos : INTEGER RANGE 0 TO SCREEN_HEIGHT-1;
+  SIGNAL hist_x : INTEGER RANGE 0 TO SCREEN_WIDTH-1;
+  SIGNAL hist_y : INTEGER RANGE 0 TO SCREEN_HEIGHT-1;
   SIGNAL in_hist_area : BOOLEAN;
   SIGNAL hist_bin : INTEGER RANGE 0 TO 255;
-  SIGNAL normalized_height : INTEGER RANGE 0 TO 255;
+  SIGNAL normalized_height : INTEGER RANGE 0 TO HIST_HEIGHT;
   SIGNAL max_hist_value : UNSIGNED(15 DOWNTO 0) := (OTHERS => '0');
-
-  SIGNAL log_hist_value : INTEGER RANGE 0 TO 255;
+  
+  SIGNAL log_hist_value : INTEGER RANGE 0 TO HIST_HEIGHT;
   SIGNAL current_hist_value : UNSIGNED(15 DOWNTO 0);
 
   -- 绘制控制信号
   SIGNAL draw_bar : BOOLEAN;
   SIGNAL draw_grid : BOOLEAN;
   SIGNAL draw_axis : BOOLEAN;
-  -- SIGNAL draw_label : BOOLEAN;
+  SIGNAL draw_title : BOOLEAN;
 
   -- 直方图颜色 (RGB565格式)
   SIGNAL hist_color : STD_LOGIC_VECTOR(15 DOWNTO 0);
-  -- SIGNAL label_color : STD_LOGIC_VECTOR(15 DOWNTO 0);
+
+  -- 地址转换函数：将线性地址转换为x,y坐标
+  FUNCTION addr_to_xy(addr_val : STD_LOGIC_VECTOR(16 DOWNTO 0)) 
+    RETURN INTEGER IS
+    VARIABLE addr_int : INTEGER;
+    VARIABLE x_coord : INTEGER;
+    VARIABLE y_coord : INTEGER;
+  BEGIN
+    addr_int := TO_INTEGER(UNSIGNED(addr_val));
+    x_coord := addr_int MOD SCREEN_WIDTH;
+    y_coord := addr_int / SCREEN_WIDTH;
+    -- 返回打包的坐标 (y*1000 + x 用于区分)
+    RETURN y_coord * 1000 + x_coord;
+  END FUNCTION;
 
   -- 对数换算函数 (简化版本，适合硬件实现)
   FUNCTION log2_approx(value : UNSIGNED) RETURN INTEGER IS
@@ -72,6 +87,15 @@ ARCHITECTURE Behavioral OF histogram_display IS
   END FUNCTION;
 
 BEGIN
+  -- 地址转换 (将线性视频地址转换为x,y坐标)
+  PROCESS (hist_addr)
+    VARIABLE coord_pack : INTEGER;
+  BEGIN
+    coord_pack := addr_to_xy(hist_addr);
+    y_pos <= coord_pack / 1000;
+    x_pos <= coord_pack MOD 1000;
+  END PROCESS;
+
   -- 根据直方图类型设置颜色
   WITH hist_type SELECT
     hist_color <=
@@ -81,26 +105,18 @@ BEGIN
     x"001F" WHEN "11", -- B: 蓝色
     x"FFFF" WHEN OTHERS;
 
-  -- 标签颜色设置（与直方图颜色相同但稍暗）
-  -- WITH hist_type SELECT
-  --   label_color <=
-  --   x"C618" WHEN "00", -- 亮度: 浅灰色
-  --   x"C000" WHEN "01", -- R: 暗红色
-  --   x"0560" WHEN "10", -- G: 暗绿色
-  --   x"0012" WHEN "11", -- B: 暗蓝色
-  --   x"C618" WHEN OTHERS;
-
   -- 计算直方图区域内的相对坐标
-  hist_x <= TO_INTEGER(UNSIGNED(x_pos)) - HIST_X_OFFSET;
-  hist_y <= TO_INTEGER(UNSIGNED(y_pos)) - HIST_Y_OFFSET;
+  hist_x <= x_pos - HIST_X_OFFSET;
+  hist_y <= y_pos - HIST_Y_OFFSET;
   in_hist_area <= (hist_x >= 0) AND (hist_x < HIST_WIDTH) AND
-    (hist_y >= 0) AND (hist_y < HIST_HEIGHT);
+                  (hist_y >= 0) AND (hist_y < HIST_HEIGHT);
 
-  -- 计算当前像素对应的直方图bin
-  hist_bin <= hist_x * 256 / HIST_WIDTH WHEN in_hist_area ELSE 0;
-  hist_addr <= STD_LOGIC_VECTOR(TO_UNSIGNED(hist_bin, 8));
+  -- 计算当前像素对应的直方图bin索引，输出到histogram_generator
+  hist_bin <= (hist_x * 256) / HIST_WIDTH WHEN in_hist_area AND (hist_x >= 0) ELSE 0;
+  hist_bin_addr <= STD_LOGIC_VECTOR(TO_UNSIGNED(hist_bin, 8));
 
-  current_hist_value <= UNSIGNED(hist_data);
+  -- 获取当前bin的直方图数据
+  current_hist_value <= UNSIGNED(hist_bin_data);
 
   -- 对数刻度处理进程
   PROCESS (clk)
@@ -118,8 +134,11 @@ BEGIN
         -- 计算对数高度
         IF current_hist_value > 0 THEN
           -- 使用对数刻度：log_height = log2(value) * scale_factor
-          -- 将16位的对数范围(0-16)映射到显示高度(0-255)
-          log_hist_value <= log2_approx(current_hist_value) * 16;
+          -- 将16位的对数范围(0-16)映射到显示高度(0-200)
+          log_hist_value <= log2_approx(current_hist_value) * (HIST_HEIGHT / 16);
+          IF log_hist_value > HIST_HEIGHT THEN
+            log_hist_value <= HIST_HEIGHT;
+          END IF;
         ELSE
           log_hist_value <= 0;
         END IF;
@@ -135,36 +154,35 @@ BEGIN
 
   -- 绘制网格和轴
   draw_grid <= in_hist_area AND
-    ((hist_x MOD 64 = 0) OR (hist_y MOD 32 = 0)); -- 更密的水平网格
+               ((hist_x MOD 40 = 0) OR (hist_y MOD 25 = 0)); -- 全屏网格密度
 
   draw_axis <= in_hist_area AND
-    ((hist_x = 0) OR (hist_y = HIST_HEIGHT - 1));
+               ((hist_x = 0) OR (hist_y = HIST_HEIGHT - 1) OR (hist_x = HIST_WIDTH - 1));
 
-  -- 标签区域检测（在直方图区域的顶部显示类型标签）
-  -- draw_label <= in_hist_area AND 
-  --               (hist_y < 24) AND 
-  --               (hist_x >= 8) AND (hist_x < 96); -- 标签显示区域
+  -- 标题区域 (屏幕顶部显示类型标识和刻度标签)
+  draw_title <= (y_pos >= 5) AND (y_pos < 35) AND 
+                (x_pos >= 10) AND (x_pos < 200);
 
   -- 根据不同条件确定输出像素颜色（按优先级排序）
-  PROCESS (active, in_hist_area, draw_axis, draw_grid, draw_bar, hist_color)
+  PROCESS (clk)
   BEGIN
-    IF active = '1' THEN
-      IF in_hist_area THEN
-        -- 按优先级顺序检查绘制条件
+    IF rising_edge(clk) THEN
+      -- 按优先级顺序检查绘制条件
+      IF draw_title THEN
+        hist_data <= hist_color; -- 标题区域用直方图颜色
+      ELSIF in_hist_area THEN
         IF draw_axis THEN
-          pixel_out <= x"FFFF"; -- 白色轴线（最高优先级）
+          hist_data <= x"FFFF"; -- 白色轴线（最高优先级）
         ELSIF draw_grid THEN
-          pixel_out <= x"4208"; -- 深灰色网格（第三优先级）
+          hist_data <= x"4208"; -- 深灰色网格
         ELSIF draw_bar THEN
-          pixel_out <= hist_color; -- 直方图条形颜色（第四优先级）
+          hist_data <= hist_color; -- 直方图条形颜色
         ELSE
-          pixel_out <= x"0000"; -- 黑色背景（最低优先级）
+          hist_data <= x"0000"; -- 黑色背景
         END IF;
       ELSE
-        pixel_out <= x"0000"; -- 显示区域外为黑色
+        hist_data <= x"0000"; -- 显示区域外为黑色
       END IF;
-    ELSE
-      pixel_out <= x"0000"; -- 非活动区域为黑色
     END IF;
   END PROCESS;
 

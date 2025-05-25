@@ -195,16 +195,31 @@ ARCHITECTURE rtl OF Project1_top IS
 
   COMPONENT input_selector IS
     PORT (
-      clk : IN STD_LOGIC;
-      select_input : IN STD_LOGIC;
-      fb_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
-      fb_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-      tp_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
-      tp_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-      tp_select : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
-      tp_pattern : IN STD_LOGIC_VECTOR(2 DOWNTO 0);
-      vga_addr : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
-      vga_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
+      -- 控制信号
+      clk : IN STD_LOGIC; -- 时钟信号
+      select_input : IN STD_LOGIC_VECTOR(1 DOWNTO 0); -- 输入选择信号 (00=摄像头, 01=测试图案, 10=直方图, 11=光流)
+
+      -- 摄像头/帧缓冲区接口
+      fb_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 帧缓冲区读地址输出
+      fb_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 帧缓冲区数据输入
+
+      -- 测试图案接口
+      tp_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 测试图案读地址输出
+      tp_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案数据输入
+      tp_select : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 测试图案选择
+      tp_pattern : IN STD_LOGIC_VECTOR(2 DOWNTO 0); -- 测试图案模式选择
+
+      -- VGA输出接口 (连接到VGA驱动器)
+      vga_addr : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- VGA请求地址输入
+      vga_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- VGA数据输出
+
+      -- 简化的直方图相关端口
+      hist_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 直方图读取地址
+      hist_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565格式输出像素
+
+      -- 保留的光流图像端口
+      flow_addr : OUT STD_LOGIC_VECTOR(16 DOWNTO 0); -- 光流地址输出
+      flow_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0) -- 光流数据输入
     );
   END COMPONENT;
 
@@ -245,72 +260,68 @@ ARCHITECTURE rtl OF Project1_top IS
   -- Image Analysis Components
   ---------------------------
   -- 直方图生成器
-  -- COMPONENT histogram_generator IS
-  --   PORT (
-  --     clk : IN STD_LOGIC; -- 时钟信号
-  --     reset : IN STD_LOGIC; -- 复位信号
-
-  --     -- 视频输入接口
-  --     pixel_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 输入像素数据 (RGB565格式)
-  --     pixel_valid : IN STD_LOGIC; -- 像素有效信号
-  --     frame_start : IN STD_LOGIC; -- 帧开始信号
-
-  --     -- 直方图存储接口
-  --     hist_addr : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图读取地址 (0-255)
-  --     hist_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据输出
-
-  --     -- 控制接口
-  --     mode : IN STD_LOGIC_VECTOR(1 DOWNTO 0) -- 00: Y亮度直方图, 01: R直方图, 10: G直方图, 11: B直方图
-  --   );
-  -- END COMPONENT;
-
-  -- -- 直方图显示
-  -- COMPONENT histogram_display IS
-  --   PORT (
-  --     clk : IN STD_LOGIC; -- 时钟信号
-  --     reset : IN STD_LOGIC; -- 复位信号
-
-  --     -- VGA位置输入
-  --     x_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- X坐标 (0-639)
-  --     y_pos : IN STD_LOGIC_VECTOR(9 DOWNTO 0); -- Y坐标 (0-479)
-  --     active : IN STD_LOGIC; -- 显示区域有效信号
-
-  --     -- 直方图数据输入
-  --     hist_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据
-
-  --     -- 直方图类型控制
-  --     hist_type : IN STD_LOGIC_VECTOR(1 DOWNTO 0); -- 00: Y, 01: R, 10: G, 11: B
-
-  --     -- 像素输出
-  --     pixel_out : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565格式输出像素
-  --     hist_addr : OUT STD_LOGIC_VECTOR(7 DOWNTO 0) -- 直方图读取地址
-  --   );
-  -- END COMPONENT;
-
-  COMPONENT camera_debug IS
+  COMPONENT histogram_generator IS
     PORT (
-      clk : IN STD_LOGIC; -- 系统时钟
+      clk : IN STD_LOGIC; -- 时钟信号
       reset : IN STD_LOGIC; -- 复位信号
 
-      -- 摄像头信号
-      pclk : IN STD_LOGIC; -- 摄像头PCLK
-      vsync : IN STD_LOGIC; -- 垂直同步
-      href : IN STD_LOGIC; -- 水平参考
-      dport : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- 数据端口
+      -- 视频输入接口
+      pixel_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 输入像素数据 (RGB565格式)
+      pixel_valid : IN STD_LOGIC; -- 像素有效信号
+      frame_start : IN STD_LOGIC; -- 帧开始信号
 
-      -- LED调试输出（连接到板上LED）
-      led_pclk_active : OUT STD_LOGIC; -- PCLK活跃指示
-      led_vsync_active : OUT STD_LOGIC; -- VSYNC活跃指示  
-      led_href_active : OUT STD_LOGIC; -- HREF活跃指示
-      led_data_changing : OUT STD_LOGIC; -- 数据变化指示
+      -- 直方图存储接口
+      hist_bin_addr : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图读取地址 (0-255)
+      hist_bin_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据输出
 
-      -- 数码管显示（可选）
-      debug_counter : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 调试计数器
-
-      -- 状态输出
-      camera_working : OUT STD_LOGIC -- 摄像头工作状态
+      -- 控制接口
+      mode : IN STD_LOGIC_VECTOR(1 DOWNTO 0) -- 00: Y亮度直方图, 01: R直方图, 10: G直方图, 11: B直方图
     );
   END COMPONENT;
+
+  -- -- 直方图显示
+  COMPONENT histogram_display IS
+    PORT (
+      clk : IN STD_LOGIC; -- 时钟信号
+      reset : IN STD_LOGIC; -- 复位信号
+
+      -- 视频输出接口 (连接到input_selector)
+      hist_addr : IN STD_LOGIC_VECTOR(16 DOWNTO 0); -- 17位视频地址输入 (来自VGA控制器)
+      hist_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- RGB565格式视频数据输出 (到VGA)
+
+      -- 直方图数据源接口 (连接到histogram_generator)
+      hist_bin_addr : OUT STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图bin读取地址 (0-255)
+      hist_bin_data : IN STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图bin数据输入 (来自histogram_generator)
+
+      -- 直方图类型控制
+      hist_type : IN STD_LOGIC_VECTOR(1 DOWNTO 0) -- 00: Y, 01: R, 10: G, 11: B
+    );
+  END COMPONENT;
+
+  -- COMPONENT camera_debug IS
+  --   PORT (
+  --     clk : IN STD_LOGIC; -- 系统时钟
+  --     reset : IN STD_LOGIC; -- 复位信号
+
+  --     -- 摄像头信号
+  --     pclk : IN STD_LOGIC; -- 摄像头PCLK
+  --     vsync : IN STD_LOGIC; -- 垂直同步
+  --     href : IN STD_LOGIC; -- 水平参考
+  --     dport : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- 数据端口
+
+  --     -- LED调试输出（连接到板上LED）
+  --     led_pclk_active : OUT STD_LOGIC; -- PCLK活跃指示
+  --     led_vsync_active : OUT STD_LOGIC; -- VSYNC活跃指示  
+  --     led_href_active : OUT STD_LOGIC; -- HREF活跃指示
+  --     led_data_changing : OUT STD_LOGIC; -- 数据变化指示
+
+  --     -- 数码管显示（可选）
+  --     debug_counter : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 调试计数器
+
+  --     -- 状态输出
+  --     camera_working : OUT STD_LOGIC -- 摄像头工作状态
+  --   );
+  -- END COMPONENT;
 
   COMPONENT precise_camera_debug IS
     PORT (
@@ -409,6 +420,12 @@ ARCHITECTURE rtl OF Project1_top IS
   SIGNAL tp_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
   SIGNAL tp_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
   SIGNAL tp_select : STD_LOGIC_VECTOR(15 DOWNTO 0);
+  SIGNAL hist_addr : STD_LOGIC_VECTOR(16 DOWNTO 0); -- 修正：17位地址
+  SIGNAL hist_data : STD_LOGIC_VECTOR(15 DOWNTO 0);
+
+  -- 直方图相关信号
+  SIGNAL hist_bin_addr : STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图bin读取地址 (0-255)
+  SIGNAL hist_bin_data : STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图bin数据输入 (来自histogram_generator)
 
   -- Framebuffer验证信号
   -- SIGNAL debug_capture_active : STD_LOGIC := '0';
@@ -511,20 +528,7 @@ BEGIN
     key => KEY
   );
 
-  -- VGA驱动
-  -- vga : vga_driver PORT MAP(
-  --   clk => clk_25M,
-  --   rst => '0',
-  --   fb_addr => buffer_addr,
-  --   fb_data => buffer_data,
-  --   hsync => VGA_HS,
-  --   vsync => VGA_VS,
-  --   red => VGA_R,
-  --   green => VGA_G,
-  --   blue => VGA_B,
-  --   resolution_sel => "00"
-  -- );
-
+  -- vga驱动
   vga : vga_driver PORT MAP(
     clk => clk_25M,
     rst => '0',
@@ -538,35 +542,7 @@ BEGIN
     resolution_sel => "00"
   );
 
-  --   vga : vga_driver PORT MAP(
-  --   clk => clk_25M,
-  --   rst => '0',
-  --   fb_addr => vga_request_addr,
-  --   fb_data => final_pixel_data, -- 使用最终合成的像素数据
-  --   hsync => VGA_HS,
-  --   vsync => VGA_VS,
-  --   red => VGA_R,
-  --   green => VGA_G,
-  --   blue => VGA_B,
-  --   resolution_sel => "00"
-  -- );
-
-  -- ovcap : OV7670_capture PORT MAP
-  -- (
-  --   pclk => OV7670_PCLK,
-  --   vsync => OV7670_VSYNC,
-  --   href => OV7670_HREF,
-  --   dport => OV7670_D,
-  --   addr => capture_addr,
-  --   dout => capture_data,
-  --   we => capture_we,
-  --   -- 废弃接口 - 连接但忽略
-  --   surv => survmode,
-  --   sw5 => sw5,
-  --   sw6 => sw6,
-  --   maxx => max
-  -- );
-
+  -- 摄像头
   ovcap : OV7670_capture PORT MAP
   (
     pclk => OV7670_PCLK,
@@ -591,16 +567,6 @@ BEGIN
   --   reset => KEY(2) -- 复位信号
   -- );
 
-  -- fb : framebuffer PORT MAP
-  -- (
-  --   rdclock => clk_50M,
-  --   rdaddress => buffer_addr,
-  --   q => buffer_data,
-  --   wrclock => OV7670_PCLK,
-  --   wraddress => capture_addr,
-  --   data => capture_data,
-  --   wren => capture_we
-  -- );
   frmb : framebuffer PORT MAP
   (
     rdclock => clk_50M,
@@ -612,28 +578,25 @@ BEGIN
     wren => capture_we
   );
 
-  -- -- -- Test pattern generator
-  -- test_pattern_gen : test_pattern_generator PORT MAP
-  -- (
-  --   data => test_pattern_select, -- Unused in this module
-  --   wraddress => (OTHERS => '0'), -- Unused in this module
-  --   wrclock => clk_50M,
-  --   wren => '1', -- Unused in this module
-  --   rdaddress => buffer_addr,
-  --   rdclock => clk_25M,
-  --   q => buffer_data
-  -- );
-  -- test_pattern_gen : test_pattern_generator PORT MAP
-  -- (
-  --   data => tp_select,
-  --   wraddress => (OTHERS => '0'),
-  --   wrclock => clk_50M,
-  --   wren => '1',
-  --   rdaddress => tp_addr,
-  --   rdclock => clk_25M,
-  --   q => tp_data
-  -- );
+  input_sel : input_selector PORT MAP
+  (
+    clk => clk_50M,
+    select_input => SW(4 DOWNTO 3),
+    fb_addr => fb_addr,
+    fb_data => fb_data,
+    tp_addr => tp_addr,
+    tp_data => tp_data,
+    tp_select => tp_select,
+    tp_pattern => SW(2 DOWNTO 0),
+    hist_addr => hist_addr, -- Unused in this module
+    hist_data => hist_data, -- Unused in this module
+    flow_addr => OPEN, -- Unused in this module
+    flow_data => (OTHERS => '0'), -- Unused in this module
+    vga_addr => vga_request_addr,
+    vga_data => output_yield_data
+  );
 
+  -- Test pattern generator
   test_pattern_gen : test_pattern_generator PORT MAP
   (
     data => tp_select,
@@ -645,57 +608,56 @@ BEGIN
     q => tp_data
   );
 
-  input_sel : input_selector PORT MAP
+  --   -- 直方图生成器实例化
+  hist_gen : histogram_generator PORT MAP
   (
-    clk => clk_25M,
-    select_input => SW(9),
-    fb_addr => fb_addr,
-    fb_data => fb_data,
-    tp_addr => tp_addr,
-    tp_data => tp_data,
-    tp_select => tp_select,
-    tp_pattern => SW(2 DOWNTO 0),
-    vga_addr => vga_request_addr,
-    vga_data => output_yield_data
+    clk => clk_50M,
+    reset => KEY(2),
+
+    -- 视频输入接口
+    pixel_data => capture_data,
+    pixel_valid => capture_we,
+    frame_start => OV7670_vsync,
+    -- 直方图存储接口
+    hist_bin_addr => hist_bin_addr,
+    hist_bin_data => hist_bin_data,
+
+    -- 控制接口
+    mode => SW(1 DOWNTO 0) -- 00: Y, 01: R, 10: G, 11: B
   );
 
-  --   -- 直方图生成器实例化
-  -- hist_gen : histogram_generator PORT MAP(
-  --   clk => OV7670_PCLK,
+  hist_disp : histogram_display PORT MAP
+  (
+    clk => clk_50M,
+    reset => KEY(2),
+
+    -- 视频输出接口
+    hist_addr => hist_addr,
+    hist_data => hist_data,
+
+    -- 直方图数据源接口
+    hist_bin_addr => hist_bin_addr,
+    hist_bin_data => hist_bin_data,
+
+    -- 直方图类型控制
+    hist_type => SW(1 DOWNTO 0) -- 00: Y, 01: R, 10: G, 11: B
+  );
+
+  -- 直方图显示组件实例化
+  -- hist_display : histogram_display PORT MAP(
+  --   clk => clk_50M,
   --   reset => '0',
 
-  --   -- 视频输入接口 - 直接使用capture数据
-  --   pixel_data => capture_data,
-  --   pixel_valid => capture_we,
-  --   frame_start => frame_start,
-
-  --   -- 直方图存储接口
-  --   hist_addr => hist_addr,
-  --   hist_data => hist_data,
-
-  --   -- 控制接口
-  --   mode => hist_mode
-  -- );
-
-  -- -- 直方图显示组件实例化
-  -- hist_disp : histogram_display PORT MAP(
-  --   clk => clk_25M,
-  --   reset => '0',
-
-  --   -- VGA位置输入
-  --   x_pos => vga_x_coord,
-  --   y_pos => vga_y_coord,
-  --   active => vga_display_active,
+  --   -- 地址接口
+  --   addr => fb_addr,
 
   --   -- 直方图数据输入
-  --   hist_data => hist_data,
+  --   hist_bin_data => hist_data,
+  --   hist_addr => hist_addr,
+  --   hist_data => fb_data,
 
   --   -- 直方图类型控制
-  --   hist_type => hist_mode,
-
-  --   -- 像素输出
-  --   pixel_out => hist_pixel,
-  --   hist_addr => hist_addr
+  --   hist_type => SW(1 DOWNTO 0) -- 00: Y, 01: R, 10: G, 11: B
   -- );
 
   freq_meter : pclk_frequency_meter

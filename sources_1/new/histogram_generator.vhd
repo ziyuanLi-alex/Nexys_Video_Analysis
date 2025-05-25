@@ -13,8 +13,8 @@ ENTITY histogram_generator IS
     frame_start : IN STD_LOGIC; -- 帧开始信号
     
     -- 直方图存储接口
-    hist_addr : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图读取地址 (0-255)
-    hist_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据输出
+    hist_bin_addr : IN STD_LOGIC_VECTOR(7 DOWNTO 0); -- 直方图读取地址 (0-255)
+    hist_bin_data : OUT STD_LOGIC_VECTOR(15 DOWNTO 0); -- 直方图数据输出
     
     -- 控制接口
     mode : IN STD_LOGIC_VECTOR(1 DOWNTO 0) -- 00: Y亮度直方图, 01: R直方图, 10: G直方图, 11: B直方图
@@ -78,7 +78,7 @@ BEGIN
       end if;
       
       -- 输出请求的直方图数据
-      hist_data <= STD_LOGIC_VECTOR(hist_bins(to_integer(unsigned(hist_addr))));
+      hist_bin_data <= STD_LOGIC_VECTOR(hist_bins(to_integer(unsigned(hist_bin_addr))));
     end if;
   end process;
   
